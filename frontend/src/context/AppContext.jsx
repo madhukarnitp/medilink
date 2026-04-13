@@ -4,6 +4,8 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
+  useRef,
 } from "react";
 import { auth as authApi, clearTokens } from "../services/api";
 import {
@@ -17,6 +19,7 @@ import {
   playIncomingMessageTone,
   playNotificationSound,
 } from "../services/sounds";
+import notificationIcon from "../assets/logo_2.png";
 
 export const PAGES = {
   DASHBOARD: "dashboard",
@@ -41,6 +44,34 @@ const getHomePage = (role) => {
   return PAGES.DASHBOARD;
 };
 
+const getDeepLinkTarget = () => {
+  if (typeof window === "undefined") return null;
+
+  const rawHash = window.location.hash.replace(/^#\/?/, "");
+  const source = rawHash || window.location.pathname.replace(/^\/+/, "");
+  const [route] = source.split(/[?#]/);
+  const parts = route.split("/").filter(Boolean);
+
+  if (parts[0] === "prescription" && parts[1]) {
+    return {
+      page: PAGES.PRESCRIPTION,
+      params: { prescriptionId: decodeURIComponent(parts[1]) },
+    };
+  }
+
+  if (parts[0] === "consultation" && parts[1]) {
+    return {
+      page: PAGES.CONSULTATION,
+      params: {
+        consultationId: decodeURIComponent(parts[1]),
+        mode: parts[2] === "call" ? "call" : "chat",
+      },
+    };
+  }
+
+  return null;
+};
+
 const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
@@ -62,6 +93,29 @@ export function AppProvider({ children }) {
       : Notification.permission,
   );
   const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
+  const activePageRef = useRef(activePage);
+  const selectedConsultationIdRef = useRef(selectedConsultationId);
+  const userRef = useRef(user);
+  const pendingDeepLinkRef = useRef(getDeepLinkTarget());
+
+  activePageRef.current = activePage;
+  selectedConsultationIdRef.current = selectedConsultationId;
+  userRef.current = user;
+
+  const applyNavigationTarget = useCallback((page, params = {}) => {
+    setActivePage(page);
+    setPageParams(params);
+    if (params.doctor !== undefined) setSelectedDoctor(params.doctor);
+    if (params.prescriptionId !== undefined) {
+      setSelectedPrescriptionId(params.prescriptionId);
+    }
+    if (page === PAGES.CONSULTATION && params.consultationId === undefined) {
+      setSelectedConsultationId(null);
+    } else if (params.consultationId !== undefined) {
+      setSelectedConsultationId(params.consultationId);
+    }
+  }, []);
 
   // Restore session on mount
   useEffect(() => {
@@ -74,20 +128,29 @@ export function AppProvider({ children }) {
 
       const saved = authApi.getSavedUser();
       if (saved) {
+        const target = pendingDeepLinkRef.current;
         setUser(saved);
         setIsAuthenticated(true);
-        setActivePage(getHomePage(saved.role));
+        applyNavigationTarget(
+          target?.page || getHomePage(saved.role),
+          target?.params || {},
+        );
         setLoading(false);
         connectSocket(token);
       }
 
       try {
         const res = await authApi.getMe();
+        const target = pendingDeepLinkRef.current;
         setUser(res.data.user);
         setProfile(res.data.profile);
         localStorage.setItem("ml_user", JSON.stringify(res.data.user));
         setIsAuthenticated(true);
-        setActivePage(getHomePage(res.data.user.role));
+        applyNavigationTarget(
+          target?.page || getHomePage(res.data.user.role),
+          target?.params || {},
+        );
+        pendingDeepLinkRef.current = null;
         connectSocket(token);
       } catch {
         setIsAuthenticated(false);
@@ -98,11 +161,21 @@ export function AppProvider({ children }) {
       }
     })();
     return () => disconnectSocket();
-  }, []);
+  }, [applyNavigationTarget]);
 
   const showToast = useCallback((message, type = "success") => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
+    toastTimer.current = setTimeout(() => {
+      setToast(null);
+      toastTimer.current = null;
+    }, 3500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
   }, []);
 
   const requestNotificationPermission = useCallback(async () => {
@@ -172,14 +245,19 @@ export function AppProvider({ children }) {
       const data = await authApi.login(email, password);
       // Connect socket right after login
       const token = localStorage.getItem("ml_token");
+      const target = pendingDeepLinkRef.current;
       connectSocket(token);
       setUser(data.user);
       setIsAuthenticated(true);
-      setActivePage(getHomePage(data.user.role));
+      applyNavigationTarget(
+        target?.page || getHomePage(data.user.role),
+        target?.params || {},
+      );
+      pendingDeepLinkRef.current = null;
       showToast(`Welcome back, ${data.user.name.split(" ")[0]}!`);
       return data;
     },
-    [showToast],
+    [applyNavigationTarget, showToast],
   );
 
   const logout = useCallback(async () => {
@@ -193,18 +271,13 @@ export function AppProvider({ children }) {
     showToast("Logged out successfully");
   }, [showToast]);
 
-  const navigate = useCallback((page, params = {}) => {
-    setActivePage(page);
-    setPageParams(params);
-    if (params.doctor !== undefined) setSelectedDoctor(params.doctor);
-    if (params.prescriptionId !== undefined)
-      setSelectedPrescriptionId(params.prescriptionId);
-    if (page === PAGES.CONSULTATION && params.consultationId === undefined) {
-      setSelectedConsultationId(null);
-    } else if (params.consultationId !== undefined) {
-      setSelectedConsultationId(params.consultationId);
-    }
-  }, []);
+  const navigate = useCallback(
+    (page, params = {}) => {
+      pendingDeepLinkRef.current = null;
+      applyNavigationTarget(page, params);
+    },
+    [applyNavigationTarget],
+  );
 
   const acceptIncomingCall = useCallback(() => {
     if (!incomingCall?.consultationId) return;
@@ -236,13 +309,19 @@ export function AppProvider({ children }) {
   }, [incomingCall]);
 
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (!isAuthenticated || !userRef.current) return;
 
     const token = localStorage.getItem("ml_token");
     const sock = getSocket() || (token ? connectSocket(token) : null);
     if (!sock) return;
 
-    const showBrowserNotification = (title, body) => {
+    const showBrowserNotification = ({
+      title,
+      body,
+      type = "general",
+      page,
+      params,
+    }) => {
       if (
         typeof Notification === "undefined" ||
         Notification.permission !== "granted"
@@ -254,11 +333,21 @@ export function AppProvider({ children }) {
       )
         return;
       try {
-        new Notification(title, {
+        const notification = new Notification(title, {
           body,
-          icon: "/vite.svg",
-          tag: "medilink-notification",
+          icon: notificationIcon,
+          badge: notificationIcon,
+          tag: params?.consultationId
+            ? `medilink-${type}-${params.consultationId}`
+            : `medilink-${type}`,
+          requireInteraction:
+            type === "video_call" || type === "consultation_request",
         });
+        notification.onclick = () => {
+          window.focus();
+          if (page) navigate(page, params || {});
+          notification.close();
+        };
       } catch {}
     };
 
@@ -286,22 +375,24 @@ export function AppProvider({ children }) {
       } else {
         playNotificationSound();
       }
-      showBrowserNotification(title, body);
+      showBrowserNotification({ title, body, type, page, params });
       return item;
     };
 
     const onMessage = (msg = {}) => {
+      const currentUser = userRef.current;
       const senderId = msg.sender?._id || msg.sender;
       const fromMe = senderId
-        ? String(senderId) === String(user?._id)
-        : msg.senderRole === user?.role;
+        ? String(senderId) === String(currentUser?._id)
+        : msg.senderRole === currentUser?.role;
       const consultationId =
         msg.consultationId?._id || msg.consultationId || msg.consultation?._id;
       const viewingSameConsultation =
-        activePage === PAGES.CONSULTATION &&
+        activePageRef.current === PAGES.CONSULTATION &&
         (!consultationId ||
-          (selectedConsultationId &&
-            String(consultationId) === String(selectedConsultationId)));
+          (selectedConsultationIdRef.current &&
+            String(consultationId) ===
+              String(selectedConsultationIdRef.current)));
 
       if (fromMe || viewingSameConsultation) return;
 
@@ -331,6 +422,7 @@ export function AppProvider({ children }) {
     };
 
     const onConsultationRequest = (payload = {}) => {
+      const currentUser = userRef.current;
       const message = payload.reason
         ? `${payload.patient?.name || "A patient"} requested a consultation: ${payload.reason}`
         : `${payload.patient?.name || "A patient"} requested a consultation.`;
@@ -345,8 +437,8 @@ export function AppProvider({ children }) {
           : undefined,
       });
 
-      if (user?.role === "doctor" && payload.consultationId) {
-        if (activePage !== PAGES.DOCTOR_DASHBOARD) {
+      if (currentUser?.role === "doctor" && payload.consultationId) {
+        if (activePageRef.current !== PAGES.DOCTOR_DASHBOARD) {
           navigate(PAGES.CONSULTATION, {
             consultationId: payload.consultationId,
           });
@@ -438,44 +530,71 @@ export function AppProvider({ children }) {
       sock.off(EVENTS.VIDEO_CALL_DECLINED, onVideoCallDeclined);
       sock.off("connect_error", onSocketConnectError);
     };
-  }, [activePage, isAuthenticated, selectedConsultationId, showToast, user]);
+  }, [isAuthenticated, navigate, onSocketConnectError, showToast]);
+
+  const value = useMemo(
+    () => ({
+      user,
+      profile,
+      isAuthenticated,
+      loading,
+      activePage,
+      pageParams,
+      selectedDoctor,
+      selectedPrescriptionId,
+      selectedConsultationId,
+      notifications,
+      notificationItems,
+      notificationPermission,
+      incomingCall,
+      toast,
+      login,
+      logout,
+      navigate,
+      showToast,
+      syncSession,
+      setNotifications,
+      requestNotificationPermission,
+      acceptIncomingCall,
+      openIncomingCallChat,
+      dismissIncomingCall,
+      clearNotifications,
+      dismissNotification,
+      setSelectedDoctor,
+      setSelectedPrescriptionId,
+      setSelectedConsultationId,
+    }),
+    [
+      acceptIncomingCall,
+      activePage,
+      clearNotifications,
+      dismissIncomingCall,
+      dismissNotification,
+      incomingCall,
+      isAuthenticated,
+      loading,
+      login,
+      logout,
+      navigate,
+      notificationItems,
+      notificationPermission,
+      notifications,
+      openIncomingCallChat,
+      pageParams,
+      profile,
+      requestNotificationPermission,
+      selectedConsultationId,
+      selectedDoctor,
+      selectedPrescriptionId,
+      showToast,
+      syncSession,
+      toast,
+      user,
+    ],
+  );
 
   return (
-    <Ctx.Provider
-      value={{
-        user,
-        profile,
-        isAuthenticated,
-        loading,
-        activePage,
-        pageParams,
-        selectedDoctor,
-        selectedPrescriptionId,
-        selectedConsultationId,
-        notifications,
-        notificationItems,
-        notificationPermission,
-        incomingCall,
-        toast,
-        login,
-        logout,
-        navigate,
-        showToast,
-        syncSession,
-        setNotifications,
-        requestNotificationPermission,
-        acceptIncomingCall,
-        openIncomingCallChat,
-        dismissIncomingCall,
-        clearNotifications,
-        dismissNotification,
-        setSelectedDoctor,
-        setSelectedPrescriptionId,
-        setSelectedConsultationId,
-      }}
-    >
-      {children}
-    </Ctx.Provider>
+    <Ctx.Provider value={value}>{children}</Ctx.Provider>
   );
 }
 

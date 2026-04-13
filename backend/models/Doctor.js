@@ -103,6 +103,10 @@ doctorSchema.index({ specialization: 1 });
 doctorSchema.index({ online: 1 });
 doctorSchema.index({ rating: -1 });
 doctorSchema.index({ price: 1 });
+doctorSchema.index({ specialization: 1, rating: -1 });
+doctorSchema.index({ online: 1, rating: -1 });
+doctorSchema.index({ isVerified: 1, rating: -1 });
+doctorSchema.index({ price: 1, rating: -1 });
 
 // Update rating on review
 doctorSchema.methods.updateRating = async function (newRating) {

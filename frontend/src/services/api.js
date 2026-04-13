@@ -2,6 +2,9 @@ const BASE_URL =
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) ||
   "http://localhost:5001/api";
 const ASSET_URL = BASE_URL.replace(/\/api\/?$/, "");
+const GET_CACHE_TTL_MS = 15_000;
+const getCache = new Map();
+let refreshPromise = null;
 
 const getToken = () => localStorage.getItem("ml_token");
 const setToken = (t) => localStorage.setItem("ml_token", t);
@@ -12,9 +15,60 @@ export const clearTokens = () => {
   localStorage.removeItem("ml_token");
   localStorage.removeItem("ml_refresh");
   localStorage.removeItem("ml_user");
+  getCache.clear();
 };
 
-async function req(path, options = {}) {
+const redirectToLogin = () => {
+  clearTokens();
+  if (typeof window !== "undefined") window.location.reload();
+};
+
+const parseResponse = async (res) => {
+  if (res.status === 204) return {};
+
+  const contentType = res.headers.get("content-type") || "";
+  const text = await res.text();
+  if (!text) return {};
+
+  if (contentType.includes("application/json")) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { message: text };
+    }
+  }
+
+  return { message: text };
+};
+
+const refreshAccessToken = async () => {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) throw new Error("Missing refresh token");
+
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    })
+      .then(async (res) => {
+        const data = await parseResponse(res);
+        if (!res.ok) {
+          throw new Error(data.message || "Session refresh failed");
+        }
+        setToken(data.data.token);
+        setRefreshToken(data.data.refreshToken);
+        return data.data.token;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+};
+
+async function send(path, options = {}) {
   const token = getToken();
   const isFormData =
     typeof FormData !== "undefined" && options.body instanceof FormData;
@@ -27,30 +81,16 @@ async function req(path, options = {}) {
 
   if (res.status === 401 && !path.includes("/auth/") && getRefreshToken()) {
     try {
-      const rr = await fetch(`${BASE_URL}/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: getRefreshToken() }),
-      });
-      if (rr.ok) {
-        const rd = await rr.json();
-        setToken(rd.data.token);
-        setRefreshToken(rd.data.refreshToken);
-        headers["Authorization"] = `Bearer ${rd.data.token}`;
-        res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
-      } else {
-        clearTokens();
-        window.location.reload();
-        return;
-      }
+      const nextToken = await refreshAccessToken();
+      headers["Authorization"] = `Bearer ${nextToken}`;
+      res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
     } catch {
-      clearTokens();
-      window.location.reload();
-      return;
+      redirectToLogin();
+      throw new Error("Session expired. Please log in again.");
     }
   }
 
-  const data = res.status === 204 ? {} : await res.json();
+  const data = await parseResponse(res);
   if (!res.ok) {
     const detail = Array.isArray(data.errors)
       ? data.errors
@@ -60,6 +100,41 @@ async function req(path, options = {}) {
       : "";
     throw new Error(detail || data.message || `Error ${res.status}`);
   }
+  return data;
+}
+
+async function req(path, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
+  const isGet = method === "GET";
+  const cacheKey = `${getToken() || "anon"}:${path}`;
+
+  if (isGet) {
+    const cached = getCache.get(cacheKey);
+    if (cached?.data && cached.expiresAt > Date.now()) return cached.data;
+    if (cached?.promise) return cached.promise;
+
+    const promise = send(path, options)
+      .then((data) => {
+        getCache.set(cacheKey, {
+          data,
+          expiresAt: Date.now() + GET_CACHE_TTL_MS,
+        });
+        return data;
+      })
+      .catch((err) => {
+        getCache.delete(cacheKey);
+        throw err;
+      });
+
+    getCache.set(cacheKey, {
+      promise,
+      expiresAt: Date.now() + GET_CACHE_TTL_MS,
+    });
+    return promise;
+  }
+
+  const data = await send(path, options);
+  getCache.clear();
   return data;
 }
 

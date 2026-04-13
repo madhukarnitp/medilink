@@ -113,7 +113,7 @@ exports.updateStatus = async (req, res, next) => {
       return error(res, `Invalid status. Must be one of: ${Object.values(PRESCRIPTION_STATUS).join(', ')}`, 400);
     }
 
-    const doctor = await Doctor.findOne({ userId: req.user._id });
+    const doctor = await Doctor.findOne({ userId: req.user._id }).select('_id').lean();
     if (!doctor) return error(res, 'Doctor profile not found', 404);
 
     const prescription = await Prescription.findOneAndUpdate(
@@ -150,7 +150,8 @@ exports.getDoctorPrescriptions = async (req, res, next) => {
         .populate({ path: 'createdFor', populate: { path: 'userId', select: 'name avatar' } })
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean({ virtuals: true }),
       Prescription.countDocuments(filter),
     ]);
 

@@ -55,21 +55,22 @@ exports.getUsers = async (req, res, next) => {
         .select(USER_SELECT)
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean({ virtuals: true }),
       User.countDocuments(filter),
     ]);
 
     const userIds = users.map((user) => user._id);
     const [patients, doctors] = await Promise.all([
-      Patient.find({ userId: { $in: userIds } }),
-      Doctor.find({ userId: { $in: userIds } }),
+      Patient.find({ userId: { $in: userIds } }).lean({ virtuals: true }),
+      Doctor.find({ userId: { $in: userIds } }).lean({ virtuals: true }),
     ]);
     const profileByUserId = new Map();
     patients.forEach((profile) => profileByUserId.set(profile.userId.toString(), profile));
     doctors.forEach((profile) => profileByUserId.set(profile.userId.toString(), profile));
 
     const usersWithProfiles = users.map((user) => ({
-      ...user.toObject(),
+      ...user,
       profile: profileByUserId.get(user._id.toString()) || null,
     }));
 
@@ -180,14 +181,14 @@ exports.getDashboard = async (req, res, next) => {
 };
 
 async function buildUserPayload(userId) {
-  const user = await User.findById(userId).select(USER_SELECT);
+  const user = await User.findById(userId).select(USER_SELECT).lean({ virtuals: true });
   if (!user) return null;
 
   let profile = null;
   if (user.role === ROLES.PATIENT) {
-    profile = await Patient.findOne({ userId: user._id });
+    profile = await Patient.findOne({ userId: user._id }).lean({ virtuals: true });
   } else if (user.role === ROLES.DOCTOR) {
-    profile = await Doctor.findOne({ userId: user._id });
+    profile = await Doctor.findOne({ userId: user._id }).lean({ virtuals: true });
   }
 
   return { user, profile };

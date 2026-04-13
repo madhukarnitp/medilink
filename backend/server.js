@@ -127,6 +127,16 @@ app.use('/api/consultations', consultationRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 
+app.get('/prescription/:id', (req, res) => {
+  const clientUrl = process.env.CLIENT_URL || allowedOrigins[0] || 'http://localhost:3000';
+  res.redirect(302, `${clientUrl.replace(/\/$/, '')}/#/prescription/${encodeURIComponent(req.params.id)}`);
+});
+
+app.get('/consultation/:id', (req, res) => {
+  const clientUrl = process.env.CLIENT_URL || allowedOrigins[0] || 'http://localhost:3000';
+  res.redirect(302, `${clientUrl.replace(/\/$/, '')}/#/consultation/${encodeURIComponent(req.params.id)}`);
+});
+
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` });

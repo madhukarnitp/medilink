@@ -39,20 +39,27 @@ export default function Prescription() {
 
   useEffect(() => {
     if (!selectedPrescriptionId) {
+      setRx(null);
       setLoading(false);
       return;
     }
+
+    let ignore = false;
+    setLoading(true);
+    setError("");
+    setQrCodeUrl("");
+
     (async () => {
       try {
         const r =
           user?.role === "doctor"
             ? await rxApi.getById(selectedPrescriptionId)
             : await patientsApi.getPrescriptionById(selectedPrescriptionId);
+        if (ignore) return;
         setRx(r.data);
 
-        // Generate QR code for display
         const QRCode = (await import("qrcode")).default;
-        const prescriptionUrl = `${window.location.origin}/prescription/${r.data._id}`;
+        const prescriptionUrl = `${window.location.origin}/#/prescription/${r.data._id}`;
         const qrUrl = await QRCode.toDataURL(prescriptionUrl, {
           width: 120,
           margin: 1,
@@ -61,34 +68,18 @@ export default function Prescription() {
             light: '#FFFFFF'
           }
         });
-        setQrCodeUrl(qrUrl);
+        if (!ignore) setQrCodeUrl(qrUrl);
       } catch (e) {
-        setError(e.message);
+        if (!ignore) setError(e.message);
       } finally {
-        setLoading(false);
+        if (!ignore) setLoading(false);
       }
     })();
-  }, [selectedPrescriptionId]);
 
-  useEffect(() => {
-    if (!selectedPrescriptionId) {
-      setLoading(false);
-      return;
-    }
-    (async () => {
-      try {
-        const r =
-          user?.role === "doctor"
-            ? await rxApi.getById(selectedPrescriptionId)
-            : await patientsApi.getPrescriptionById(selectedPrescriptionId);
-        setRx(r.data);
-      } catch (e) {
-        setError(e.message);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [selectedPrescriptionId]);
+    return () => {
+      ignore = true;
+    };
+  }, [selectedPrescriptionId, user?.role]);
 
   if (loading)
     return (
@@ -145,7 +136,7 @@ export default function Prescription() {
     // Generate QR code
     const QRCode = (await import("qrcode")).default;
     const qrCanvas = document.createElement("canvas");
-    const prescriptionUrl = `${window.location.origin}/prescription/${rx._id}`;
+    const prescriptionUrl = `${window.location.origin}/#/prescription/${rx._id}`;
     await QRCode.toCanvas(qrCanvas, prescriptionUrl, {
       width: 100,
       margin: 1,

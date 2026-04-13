@@ -83,6 +83,10 @@ prescriptionSchema.pre('save', function (next) {
 // ✅ Indexes (optimized, no duplicate)
 prescriptionSchema.index({ createdFor: 1, status: 1 });
 prescriptionSchema.index({ createdBy: 1 });
+prescriptionSchema.index({ createdFor: 1, createdAt: -1 });
+prescriptionSchema.index({ createdBy: 1, createdAt: -1 });
+prescriptionSchema.index({ createdFor: 1, status: 1, createdAt: -1 });
+prescriptionSchema.index({ createdBy: 1, status: 1, createdAt: -1 });
 
 // ❌ REMOVED duplicate: prescriptionSchema.index({ rxId: 1 });
 

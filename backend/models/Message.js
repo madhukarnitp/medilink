@@ -54,5 +54,6 @@ messageSchema.pre('save', function (next) {
 });
 
 messageSchema.index({ consultation: 1, createdAt: 1 });
+messageSchema.index({ consultation: 1, sender: 1, isRead: 1 });
 
 module.exports = mongoose.model('Message', messageSchema);

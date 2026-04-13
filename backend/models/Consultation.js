@@ -91,6 +91,10 @@ consultationSchema.methods.endConsultation = async function () {
 // 🔥 OPTIMAL INDEXES (Video call performance)
 consultationSchema.index({ patient: 1, status: 1 });
 consultationSchema.index({ doctor: 1, status: 1 });
+consultationSchema.index({ patient: 1, createdAt: -1 });
+consultationSchema.index({ doctor: 1, createdAt: -1 });
+consultationSchema.index({ patient: 1, status: 1, createdAt: -1 });
+consultationSchema.index({ doctor: 1, status: 1, createdAt: -1 });
 consultationSchema.index({ roomId: 1 });        // ✅ WebSocket lookup
 consultationSchema.index({ status: 1, createdAt: -1 }); // Dashboard lists
 

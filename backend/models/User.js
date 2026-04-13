@@ -118,4 +118,8 @@ userSchema.methods.toSafeJSON = function () {
   return obj;
 };
 
+userSchema.index({ role: 1, isActive: 1, createdAt: -1 });
+userSchema.index({ emailVerifyToken: 1, emailVerifyExpire: 1 });
+userSchema.index({ resetPasswordToken: 1, resetPasswordExpire: 1 });
+
 module.exports = mongoose.model('User', userSchema);

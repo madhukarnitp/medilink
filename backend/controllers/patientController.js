@@ -10,7 +10,9 @@ const { PRESCRIPTION_STATUS, CONSULTATION_STATUS, PAGINATION } = require('../uti
  */
 exports.getProfile = async (req, res, next) => {
   try {
-    const patient = await Patient.findOne({ userId: req.user._id }).populate('user', 'name email phone avatar isEmailVerified createdAt');
+    const patient = await Patient.findOne({ userId: req.user._id })
+      .populate('user', 'name email phone avatar isEmailVerified createdAt')
+      .lean({ virtuals: true });
     if (!patient) return error(res, 'Patient profile not found', 404);
     return success(res, patient);
   } catch (err) {
@@ -59,7 +61,7 @@ exports.getPrescriptions = async (req, res, next) => {
     const limit = Math.min(Math.max(requestedLimit, 1), PAGINATION.MAX_LIMIT);
     const skip = (page - 1) * limit;
 
-    const patient = await Patient.findOne({ userId: req.user._id });
+    const patient = await Patient.findOne({ userId: req.user._id }).select('_id').lean();
     if (!patient) return error(res, 'Patient profile not found', 404);
 
     const filter = { createdFor: patient._id };
@@ -70,7 +72,8 @@ exports.getPrescriptions = async (req, res, next) => {
         .populate({ path: 'createdBy', populate: { path: 'userId', select: 'name avatar' } })
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean({ virtuals: true }),
       Prescription.countDocuments(filter),
     ]);
 
@@ -85,7 +88,7 @@ exports.getPrescriptions = async (req, res, next) => {
  */
 exports.getActivePrescriptions = async (req, res, next) => {
   try {
-    const patient = await Patient.findOne({ userId: req.user._id });
+    const patient = await Patient.findOne({ userId: req.user._id }).select('_id').lean();
     if (!patient) return error(res, 'Patient profile not found', 404);
 
     // Auto-expire stale
@@ -97,7 +100,10 @@ exports.getActivePrescriptions = async (req, res, next) => {
     const prescriptions = await Prescription.find({
       createdFor: patient._id,
       status: PRESCRIPTION_STATUS.ACTIVE,
-    }).populate({ path: 'createdBy', populate: { path: 'userId', select: 'name avatar' } }).sort({ createdAt: -1 });
+    })
+      .populate({ path: 'createdBy', populate: { path: 'userId', select: 'name avatar' } })
+      .sort({ createdAt: -1 })
+      .lean({ virtuals: true });
 
     return success(res, prescriptions);
   } catch (err) {
@@ -111,11 +117,12 @@ exports.getActivePrescriptions = async (req, res, next) => {
  */
 exports.getPrescriptionById = async (req, res, next) => {
   try {
-    const patient = await Patient.findOne({ userId: req.user._id });
+    const patient = await Patient.findOne({ userId: req.user._id }).select('_id').lean();
     if (!patient) return error(res, 'Patient profile not found', 404);
 
     const prescription = await Prescription.findOne({ _id: req.params.id, createdFor: patient._id })
-      .populate({ path: 'createdBy', populate: { path: 'userId', select: 'name avatar' } });
+      .populate({ path: 'createdBy', populate: { path: 'userId', select: 'name avatar' } })
+      .lean({ virtuals: true });
 
     if (!prescription) return error(res, 'Prescription not found', 404);
     return success(res, prescription);
@@ -134,7 +141,7 @@ exports.getConsultations = async (req, res, next) => {
     const limit = Math.min(Math.max(requestedLimit, 1), PAGINATION.MAX_LIMIT);
     const skip = (page - 1) * limit;
 
-    const patient = await Patient.findOne({ userId: req.user._id });
+    const patient = await Patient.findOne({ userId: req.user._id }).select('_id').lean();
     if (!patient) return error(res, 'Patient profile not found', 404);
     const filter = { patient: patient._id };
     if (req.query.status) filter.status = req.query.status;
@@ -144,7 +151,8 @@ exports.getConsultations = async (req, res, next) => {
         .populate('prescription')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean({ virtuals: true }),
       Consultation.countDocuments(filter),
     ]);
     return paginate(res, consultations, total, page, limit);
@@ -158,7 +166,9 @@ exports.getConsultations = async (req, res, next) => {
  */
 exports.getDashboard = async (req, res, next) => {
   try {
-    const patient = await Patient.findOne({ userId: req.user._id }).populate('user', 'name avatar lastSeen');
+    const patient = await Patient.findOne({ userId: req.user._id })
+      .populate('user', 'name avatar lastSeen')
+      .lean({ virtuals: true });
     if (!patient) return error(res, 'Patient profile not found', 404);
 
     const [totalConsultations, activeConsultations, activePrescriptions, totalPrescriptions] = await Promise.all([
@@ -171,7 +181,8 @@ exports.getDashboard = async (req, res, next) => {
     const recentConsultations = await Consultation.find({ patient: patient._id })
       .populate({ path: 'doctor', populate: { path: 'userId', select: 'name avatar' } })
       .sort({ createdAt: -1 })
-      .limit(3);
+      .limit(3)
+      .lean({ virtuals: true });
 
     return success(res, {
       patient,
@@ -198,10 +209,12 @@ exports.searchPatients = async (req, res, next) => {
     const users = await User.find({
       role: 'patient',
       $or: [{ name: regex }, { email: regex }],
-    }).select('_id name email phone').limit(20);
+    }).select('_id name email phone').limit(20).lean();
 
     const userIds = users.map((u) => u._id);
-    const patients = await Patient.find({ userId: { $in: userIds } }).populate('user', 'name email phone');
+    const patients = await Patient.find({ userId: { $in: userIds } })
+      .populate('user', 'name email phone')
+      .lean({ virtuals: true });
 
     return res.json({ success: true, data: patients });
   } catch (err) {

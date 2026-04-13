@@ -39,7 +39,7 @@ exports.getAllDoctors = async (req, res, next) => {
       const users = await User.find({
         role: 'doctor',
         $or: [{ name: regex }, { email: regex }],
-      }).select('_id');
+      }).select('_id').lean();
 
       filter.$or = [
         { userId: { $in: users.map((user) => user._id) } },
@@ -53,7 +53,8 @@ exports.getAllDoctors = async (req, res, next) => {
       .populate('userId', 'name email avatar phone')
       .sort(sort)
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean({ virtuals: true });
 
     const [doctors, total] = await Promise.all([
       doctorQuery,
@@ -71,7 +72,9 @@ exports.getAllDoctors = async (req, res, next) => {
  */
 exports.getDoctorById = async (req, res, next) => {
   try {
-    const doctor = await Doctor.findById(req.params.id).populate('userId', 'name email avatar phone createdAt');
+    const doctor = await Doctor.findById(req.params.id)
+      .populate('userId', 'name email avatar phone createdAt')
+      .lean({ virtuals: true });
     if (!doctor) return error(res, 'Doctor not found', 404);
     return success(res, doctor);
   } catch (err) {
@@ -86,7 +89,8 @@ exports.getDoctorsBySpecialty = async (req, res, next) => {
   try {
     const doctors = await Doctor.find({ specialization: req.params.specialty })
       .populate('userId', 'name email avatar')
-      .sort({ rating: -1 });
+      .sort({ rating: -1 })
+      .lean({ virtuals: true });
     return success(res, doctors);
   } catch (err) {
     next(err);
@@ -98,7 +102,9 @@ exports.getDoctorsBySpecialty = async (req, res, next) => {
  */
 exports.getOwnProfile = async (req, res, next) => {
   try {
-    const doctor = await Doctor.findOne({ userId: req.user._id }).populate('userId', 'name email avatar phone isEmailVerified createdAt');
+    const doctor = await Doctor.findOne({ userId: req.user._id })
+      .populate('userId', 'name email avatar phone isEmailVerified createdAt')
+      .lean({ virtuals: true });
     if (!doctor) return error(res, 'Doctor profile not found', 404);
     return success(res, doctor);
   } catch (err) {
@@ -165,7 +171,7 @@ exports.getConsultations = async (req, res, next) => {
     const limit = Math.min(Math.max(requestedLimit, 1), PAGINATION.MAX_LIMIT);
     const skip = (page - 1) * limit;
 
-    const doctor = await Doctor.findOne({ userId: req.user._id });
+    const doctor = await Doctor.findOne({ userId: req.user._id }).select('_id').lean();
     if (!doctor) return error(res, 'Doctor profile not found', 404);
 
     const filter = { doctor: doctor._id };
@@ -177,7 +183,8 @@ exports.getConsultations = async (req, res, next) => {
         .populate('prescription')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean({ virtuals: true }),
       Consultation.countDocuments(filter),
     ]);
 
@@ -196,7 +203,9 @@ function escapeRegex(value) {
  */
 exports.getDashboard = async (req, res, next) => {
   try {
-    const doctor = await Doctor.findOne({ userId: req.user._id }).populate('userId', 'name avatar lastSeen');
+    const doctor = await Doctor.findOne({ userId: req.user._id })
+      .populate('userId', 'name avatar lastSeen')
+      .lean({ virtuals: true });
     if (!doctor) return error(res, 'Doctor profile not found', 404);
 
     const [total, active, completed, prescriptionsIssued] = await Promise.all([
@@ -209,7 +218,8 @@ exports.getDashboard = async (req, res, next) => {
     const recentConsultations = await Consultation.find({ doctor: doctor._id })
       .populate({ path: 'patient', populate: { path: 'userId', select: 'name avatar' } })
       .sort({ createdAt: -1 })
-      .limit(5);
+      .limit(5)
+      .lean({ virtuals: true });
 
     return success(res, {
       doctor,

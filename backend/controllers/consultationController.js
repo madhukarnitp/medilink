@@ -190,7 +190,7 @@ exports.getConsultationById = async (req, res, next) => {
  */
 exports.acceptConsultation = async (req, res, next) => {
   try {
-    const doctor = await Doctor.findOne({ userId: req.user._id });
+    const doctor = await Doctor.findOne({ userId: req.user._id }).select('_id').lean();
     if (!doctor) return error(res, 'Doctor profile not found', 404);
 
     const consultation = await Consultation.findOneAndUpdate(
@@ -323,7 +323,8 @@ exports.getPendingConsultations = async (req, res, next) => {
         select: 'name email avatar'  // ← More patient info
       }
     })
-    .sort({ createdAt: -1 });  // ← Newest first
+    .sort({ createdAt: -1 })
+    .lean({ virtuals: true });  // ← Newest first
 
     return success(res, consultations);
   } catch (err) {
@@ -405,7 +406,8 @@ exports.getMessages = async (req, res, next) => {
         .populate('sender', 'name avatar')
         .sort({ createdAt: 1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean({ virtuals: true }),
       Message.countDocuments({ consultation: consultation._id }),
     ]);
 

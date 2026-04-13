@@ -19,7 +19,7 @@ const cancellableStatuses = [
 
 exports.createOrder = async (req, res, next) => {
   try {
-    const patient = await Patient.findOne({ userId: req.user._id });
+    const patient = await Patient.findOne({ userId: req.user._id }).select('_id').lean();
     if (!patient) return error(res, 'Patient profile not found', 404);
 
     const {
@@ -94,7 +94,8 @@ exports.getOrders = async (req, res, next) => {
         .populate(POPULATE_FIELDS)
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean({ virtuals: true }),
       Order.countDocuments(filter),
     ]);
 
@@ -106,7 +107,9 @@ exports.getOrders = async (req, res, next) => {
 
 exports.getOrderById = async (req, res, next) => {
   try {
-    const order = await Order.findById(req.params.id).populate(POPULATE_FIELDS);
+    const order = await Order.findById(req.params.id)
+      .populate(POPULATE_FIELDS)
+      .lean({ virtuals: true });
     if (!order) return error(res, 'Order not found', 404);
 
     const hasAccess = await canAccessOrder(req.user, order);
@@ -216,7 +219,7 @@ async function canAccessOrder(user, order) {
   if (user.role === ROLES.ADMIN) return true;
   if (user.role !== ROLES.PATIENT) return false;
 
-  const patient = await Patient.findOne({ userId: user._id });
+  const patient = await Patient.findOne({ userId: user._id }).select('_id').lean();
   const orderPatientId = order.patient?._id || order.patient;
   return Boolean(patient && orderPatientId.equals(patient._id));
 }
