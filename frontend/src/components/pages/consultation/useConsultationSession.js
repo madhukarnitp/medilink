@@ -57,6 +57,7 @@ export function useConsultationSession({
   const ringAudio = useRef(null);
   const popoutWindow = useRef(null);
   const consultIdRef = useRef(selectedConsultationId);
+  const acceptingRef = useRef(false);
   const pendingVideoStart = useRef(false);
   const lastRemoteCallEndAt = useRef(0);
   const isConsultationActive = consultation?.status === "active";
@@ -433,19 +434,37 @@ export function useConsultationSession({
 
   const acceptConsultation = useCallback(async () => {
     if (!selectedConsultationId || user?.role !== "doctor") return;
+    if (acceptingRef.current || consultation?.status === "active") return;
 
+    acceptingRef.current = true;
     setAccepting(true);
     try {
       const response = await consultApi.accept(selectedConsultationId);
       setConsultation(response.data);
-      showToast("Consultation accepted. You can chat now.");
+      showToast(
+        response.alreadyActive
+          ? "Consultation is already active."
+          : "Consultation accepted. You can chat now.",
+      );
       joinConsultation(selectedConsultationId);
     } catch (e) {
+      if (/not pending|already active/i.test(e.message || "")) {
+        try {
+          const latest = await consultApi.getById(selectedConsultationId);
+          setConsultation(latest.data);
+          if (latest.data?.status === "active") {
+            showToast("Consultation is already active.");
+            joinConsultation(selectedConsultationId);
+            return;
+          }
+        } catch {}
+      }
       showToast(e.message || "Could not accept consultation", "error");
     } finally {
       setAccepting(false);
+      acceptingRef.current = false;
     }
-  }, [selectedConsultationId, showToast, user]);
+  }, [consultation?.status, selectedConsultationId, showToast, user]);
 
   const startCall = useCallback(async () => {
     if (!selectedConsultationId) {

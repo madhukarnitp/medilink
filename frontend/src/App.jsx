@@ -72,7 +72,7 @@ function PageRouter() {
 }
 
 function AppContent() {
-  const { isAuthenticated, loading, user, toast } = useApp();
+  const { dismissToast, isAuthenticated, loading, toasts, user } = useApp();
   if (loading)
     return (
       <div className="spinner-page">
@@ -94,7 +94,7 @@ function AppContent() {
       <Suspense fallback={loadingFallback}>
         <PageRouter />
       </Suspense>
-      {toast && <Toast message={toast.message} type={toast.type} />}
+      <Toast onDismiss={dismissToast} toasts={toasts} />
       <Suspense fallback={null}>
         <ChatbotWidget />
       </Suspense>

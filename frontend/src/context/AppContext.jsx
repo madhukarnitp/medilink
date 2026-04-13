@@ -72,6 +72,19 @@ const getDeepLinkTarget = () => {
   return null;
 };
 
+const getToastTypeForNotification = (type) => {
+  if (type === "video_call" || type === "consultation_request") {
+    return "warning";
+  }
+  if (type === "message" || type === "consultation_ended") {
+    return "info";
+  }
+  if (type === "consultation_accepted") {
+    return "success";
+  }
+  return "info";
+};
+
 const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
@@ -92,8 +105,8 @@ export function AppProvider({ children }) {
       ? "unsupported"
       : Notification.permission,
   );
-  const [toast, setToast] = useState(null);
-  const toastTimer = useRef(null);
+  const [toasts, setToasts] = useState([]);
+  const toastTimers = useRef(new Map());
   const activePageRef = useRef(activePage);
   const selectedConsultationIdRef = useRef(selectedConsultationId);
   const userRef = useRef(user);
@@ -163,18 +176,41 @@ export function AppProvider({ children }) {
     return () => disconnectSocket();
   }, [applyNavigationTarget]);
 
-  const showToast = useCallback((message, type = "success") => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ message, type });
-    toastTimer.current = setTimeout(() => {
-      setToast(null);
-      toastTimer.current = null;
-    }, 3500);
+  const dismissToast = useCallback((id) => {
+    const timer = toastTimers.current.get(id);
+    if (timer) clearTimeout(timer);
+    toastTimers.current.delete(id);
+    setToasts((items) => items.filter((item) => item.id !== id));
+  }, []);
+
+  const showToast = useCallback(
+    (message, type = "success") => {
+      const normalizedType =
+        ["success", "error", "warning", "info", "loading"].includes(type)
+          ? type
+          : "info";
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const duration = normalizedType === "error" ? 5200 : 3800;
+      const item = { id, message, type: normalizedType };
+
+      setToasts((items) => [item, ...items].slice(0, 4));
+      const timer = setTimeout(() => dismissToast(id), duration);
+      toastTimers.current.set(id, timer);
+      return id;
+    },
+    [dismissToast],
+  );
+
+  const clearAllToasts = useCallback(() => {
+    toastTimers.current.forEach((timer) => clearTimeout(timer));
+    toastTimers.current.clear();
+    setToasts([]);
   }, []);
 
   useEffect(() => {
     return () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
+      toastTimers.current.forEach((timer) => clearTimeout(timer));
+      toastTimers.current.clear();
     };
   }, []);
 
@@ -369,7 +405,7 @@ export function AppProvider({ children }) {
       };
       setNotifications((n) => n + 1);
       setNotificationItems((items) => [item, ...items].slice(0, 20));
-      showToast(title, "success");
+      showToast(title, getToastTypeForNotification(type));
       if (type === "message") {
         playIncomingMessageTone();
       } else {
@@ -547,11 +583,13 @@ export function AppProvider({ children }) {
       notificationItems,
       notificationPermission,
       incomingCall,
-      toast,
+      toasts,
       login,
       logout,
       navigate,
       showToast,
+      dismissToast,
+      clearAllToasts,
       syncSession,
       setNotifications,
       requestNotificationPermission,
@@ -568,8 +606,10 @@ export function AppProvider({ children }) {
       acceptIncomingCall,
       activePage,
       clearNotifications,
+      clearAllToasts,
       dismissIncomingCall,
       dismissNotification,
+      dismissToast,
       incomingCall,
       isAuthenticated,
       loading,
@@ -588,7 +628,7 @@ export function AppProvider({ children }) {
       selectedPrescriptionId,
       showToast,
       syncSession,
-      toast,
+      toasts,
       user,
     ],
   );
