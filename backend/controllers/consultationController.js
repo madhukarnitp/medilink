@@ -193,7 +193,8 @@ exports.acceptConsultation = async (req, res, next) => {
     const doctor = await Doctor.findOne({ userId: req.user._id }).select('_id').lean();
     if (!doctor) return error(res, 'Doctor profile not found', 404);
 
-    const consultation = await Consultation.findOneAndUpdate(
+    let alreadyActive = false;
+    let consultation = await Consultation.findOneAndUpdate(
       { _id: req.params.id, doctor: doctor._id, status: CONSULTATION_STATUS.PENDING },
       { status: CONSULTATION_STATUS.ACTIVE, startedAt: new Date() },
       { new: true }
@@ -202,27 +203,44 @@ exports.acceptConsultation = async (req, res, next) => {
       { path: 'doctor', populate: { path: 'userId', select: 'name avatar' } },
     ]);
 
-    if (!consultation) return error(res, 'Consultation not found or not pending', 404);
-
-    // Increment doctor's consultation count
-    await Doctor.findByIdAndUpdate(doctor._id, { $inc: { consultationCount: 1 } });
-
-    // 🔔 Notify patient that doctor accepted
-    try {
-      const { emitToUser } = require('../socket/handlers');
-      const io = require('../socket/ioInstance').get();
-      const patientUserId = consultation.patient?.userId?._id || consultation.patient?.userId;
-      if (io && patientUserId) {
-        emitToUser(io, patientUserId, 'consultationAccepted', {
-          consultationId: consultation._id,
-          doctorName: consultation.doctor?.userId?.name || 'Your doctor',
-        });
+    if (!consultation) {
+      consultation = await Consultation.findOne({
+        _id: req.params.id,
+        doctor: doctor._id,
+      }).populate([
+        { path: 'patient', populate: { path: 'userId', select: 'name avatar email' } },
+        { path: 'doctor', populate: { path: 'userId', select: 'name avatar' } },
+      ]);
+      if (!consultation) return error(res, 'Consultation not found', 404);
+      if (consultation.status !== CONSULTATION_STATUS.ACTIVE) {
+        return error(res, `Consultation is ${consultation.status} and cannot be accepted`, 409);
       }
-    } catch (socketErr) {
-      console.warn(`Accept notification failed: ${socketErr.message}`);
+      alreadyActive = true;
     }
 
-    return success(res, consultation);
+    if (!alreadyActive) {
+      // Increment once, only when this request actually moves pending -> active.
+      await Doctor.findByIdAndUpdate(doctor._id, { $inc: { consultationCount: 1 } });
+    }
+
+    // 🔔 Notify patient that doctor accepted
+    if (!alreadyActive) {
+      try {
+        const { emitToUser } = require('../socket/handlers');
+        const io = require('../socket/ioInstance').get();
+        const patientUserId = consultation.patient?.userId?._id || consultation.patient?.userId;
+        if (io && patientUserId) {
+          emitToUser(io, patientUserId, 'consultationAccepted', {
+            consultationId: consultation._id,
+            doctorName: consultation.doctor?.userId?.name || 'Your doctor',
+          });
+        }
+      } catch (socketErr) {
+        console.warn(`Accept notification failed: ${socketErr.message}`);
+      }
+    }
+
+    return success(res, consultation, 200, { alreadyActive });
   } catch (err) {
     next(err);
   }

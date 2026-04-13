@@ -93,6 +93,22 @@ describe('Consultation ending flow', () => {
     expect(res.body.data._id).toBe(consultationId);
   });
 
+  it('returns the active consultation on repeated accept requests', async () => {
+    const before = await Doctor.findById(doctorProfileId);
+
+    const res = await request(app)
+      .put(`/api/consultations/${consultationId}/accept`)
+      .set('Authorization', `Bearer ${doctorToken}`);
+
+    const after = await Doctor.findById(doctorProfileId);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.alreadyActive).toBe(true);
+    expect(res.body.data.status).toBe('active');
+    expect(after.consultationCount).toBe(before.consultationCount);
+  });
+
   it('acknowledges unauthenticated leave-call requests without ending the consultation', async () => {
     const res = await request(app)
       .put(`/api/consultations/${consultationId}/leave`);
