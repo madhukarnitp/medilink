@@ -755,15 +755,23 @@ export function useConsultationSession({
     };
     const onSocketError = (payload = {}) => {
       const message = payload.message || "Realtime message failed";
-      if (/consultation is not active/i.test(message)) {
-        setConsultation((current) =>
-          current && current.status === "active"
-            ? { ...current, status: "pending" }
-            : current,
-        );
+      if (/consultation is not active/i.test(message) && selectedConsultationId) {
+        consultApi
+          .getById(selectedConsultationId)
+          .then((latest) => {
+            setConsultation(latest.data);
+            if (latest.data?.status === "active") {
+              joinConsultation(selectedConsultationId);
+              showToast("Chat reconnected. Please send again.", "info");
+              return;
+            }
+            showToast(message, "error");
+          })
+          .catch(() => showToast(message, "error"));
         setMessages((current) =>
           current.filter((item) => !String(item._id || "").startsWith("tmp_")),
         );
+        return;
       }
       showToast(message, "error");
     };

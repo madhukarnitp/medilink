@@ -135,6 +135,10 @@ export function AppProvider({ children }) {
     (async () => {
       const token = localStorage.getItem("ml_token");
       if (!token) {
+        const target = pendingDeepLinkRef.current;
+        if (target?.page === PAGES.PRESCRIPTION) {
+          applyNavigationTarget(target.page, target.params || {});
+        }
         setLoading(false);
         return;
       }

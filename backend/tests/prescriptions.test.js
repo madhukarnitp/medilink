@@ -106,6 +106,19 @@ describe('GET /api/prescriptions/:id', () => {
   });
 });
 
+describe('GET /api/prescriptions/verify/:id', () => {
+  it('verifies a prescription without authentication', async () => {
+    if (!prescriptionId) return;
+    const res = await request(app).get(`/api/prescriptions/verify/${prescriptionId}`);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data._id).toBe(prescriptionId);
+    expect(res.body.data.verification.verified).toBe(true);
+    expect(res.body.data.createdFor.userId.email).toBeUndefined();
+  });
+});
+
 describe('PUT /api/prescriptions/:id/status', () => {
   it('doctor updates prescription status to expired', async () => {
     if (!prescriptionId) return;

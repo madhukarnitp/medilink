@@ -54,7 +54,9 @@ export default function Prescription() {
         const r =
           user?.role === "doctor"
             ? await rxApi.getById(selectedPrescriptionId)
-            : await patientsApi.getPrescriptionById(selectedPrescriptionId);
+            : user?.role === "patient"
+              ? await patientsApi.getPrescriptionById(selectedPrescriptionId)
+              : await rxApi.verify(selectedPrescriptionId);
         if (ignore) return;
         setRx(r.data);
 
@@ -103,13 +105,15 @@ export default function Prescription() {
           <br />
           <button
             className={styles.emptyBackButton}
-            onClick={() =>
-              navigate(
-                user?.role === "doctor"
-                  ? PAGES.DOCTOR_PRESCRIPTIONS
-                  : PAGES.PRESCRIPTION_LIST,
-              )
-            }
+            onClick={() => {
+              if (!user) window.location.href = "/";
+              else
+                navigate(
+                  user?.role === "doctor"
+                    ? PAGES.DOCTOR_PRESCRIPTIONS
+                    : PAGES.PRESCRIPTION_LIST,
+                );
+            }}
           >
             ← Go back
           </button>
@@ -191,19 +195,21 @@ export default function Prescription() {
       <div className={styles.greeting}>
         <div className={styles.backBtn}>
           <button
-            onClick={() =>
-              navigate(
-                user?.role === "doctor"
-                  ? PAGES.DOCTOR_PRESCRIPTIONS
-                  : PAGES.PRESCRIPTION_LIST,
-              )
-            }
+            onClick={() => {
+              if (!user) window.location.href = "/";
+              else
+                navigate(
+                  user?.role === "doctor"
+                    ? PAGES.DOCTOR_PRESCRIPTIONS
+                    : PAGES.PRESCRIPTION_LIST,
+                );
+            }}
           >
             ← Back
           </button>
         </div>
         <div>
-          <h1>Prescription</h1>
+          <h1>{user ? "Prescription" : "Prescription Verification"}</h1>
           <p>
             Issued by {docName} ·{" "}
             {new Date(rx.createdAt).toLocaleDateString("en-IN", {
@@ -240,6 +246,18 @@ export default function Prescription() {
             {sd.text}
           </div>
         </div>
+        {rx.verification?.verified && (
+          <div className={styles.warningBanner}>
+            Verified MediLink prescription. Checked{" "}
+            {new Date(rx.verification.checkedAt).toLocaleString("en-IN", {
+              day: "numeric",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+            .
+          </div>
+        )}
         {rx.status === "expired" && (
           <div className={styles.warningBanner}>
             ⚠️ This prescription has expired. Please consult your doctor for a
@@ -342,7 +360,7 @@ export default function Prescription() {
           <Button variant="outline" onClick={handleDownloadPDF}>
             Download PDF
           </Button>
-          {rx.status === "active" && user?.role !== "doctor" && (
+          {rx.status === "active" && user?.role === "patient" && (
             <Button variant="primary" onClick={() => navigate(PAGES.ORDERS)}>
               Order Medicines
             </Button>

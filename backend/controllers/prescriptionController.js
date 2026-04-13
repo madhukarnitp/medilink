@@ -103,6 +103,32 @@ exports.getPrescriptionById = async (req, res, next) => {
 };
 
 /**
+ * GET /api/prescriptions/verify/:id
+ * Public QR verification view.
+ */
+exports.verifyPrescription = async (req, res, next) => {
+  try {
+    const prescription = await Prescription.findById(req.params.id)
+      .populate({ path: 'createdBy', populate: { path: 'userId', select: 'name avatar' } })
+      .populate({ path: 'createdFor', populate: { path: 'userId', select: 'name' } })
+      .select('-notes')
+      .lean({ virtuals: true });
+
+    if (!prescription) return error(res, 'Prescription not found', 404);
+
+    return success(res, {
+      ...prescription,
+      verification: {
+        verified: true,
+        checkedAt: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * PUT /api/prescriptions/:id/status
  * Doctor only
  */

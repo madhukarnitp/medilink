@@ -16,25 +16,32 @@ const consultationCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const typingThrottle = new Map();
 
-const getCachedConsultation = async (consultationId) => {
-  const cached = consultationCache.get(consultationId);
-  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-    return cached.data;
-  }
-  
+const setCachedConsultation = (consultationId, consultation) => {
+  if (!consultationId || !consultation) return;
+  consultationCache.set(consultationId.toString(), {
+    data: consultation,
+    timestamp: Date.now()
+  });
+};
+
+const fetchConsultation = async (consultationId) => {
   const consultation = await Consultation.findById(consultationId)
     .populate('patient', 'userId')
     .populate('doctor', 'userId')
-    .lean(); // Use lean() for better performance
-    
-  if (consultation) {
-    consultationCache.set(consultationId, {
-      data: consultation,
-      timestamp: Date.now()
-    });
-  }
-  
+    .lean();
+
+  setCachedConsultation(consultationId, consultation);
   return consultation;
+};
+
+const getCachedConsultation = async (consultationId, { fresh = false } = {}) => {
+  const cacheKey = consultationId?.toString();
+  const cached = cacheKey ? consultationCache.get(cacheKey) : null;
+  if (!fresh && cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+    return cached.data;
+  }
+
+  return fetchConsultation(consultationId);
 };
 
 const getRoomMemberSockets = (roomId, userId) => {
@@ -173,7 +180,10 @@ const registerSocketHandlers = (io) => {
           return socket.emit('error', { message: 'Message must have text or attachment' });
         }
 
-        const consultation = await getCachedConsultation(consultationId);
+        let consultation = await getCachedConsultation(consultationId);
+        if (consultation && consultation.status !== CONSULTATION_STATUS.ACTIVE) {
+          consultation = await getCachedConsultation(consultationId, { fresh: true });
+        }
         if (!consultation || consultation.status !== CONSULTATION_STATUS.ACTIVE) {
           return socket.emit('error', { message: 'Consultation is not active' });
         }
@@ -314,9 +324,13 @@ const registerSocketHandlers = (io) => {
 
     socket.on('videoCall:request', async ({ consultationId } = {}) => {
       try {
-        const consultation = await getCachedConsultation(consultationId);
+        let consultation = await getCachedConsultation(consultationId);
         if (!consultation) {
           return socket.emit('error', { message: 'Consultation not found' });
+        }
+
+        if (consultation.status !== CONSULTATION_STATUS.ACTIVE) {
+          consultation = await getCachedConsultation(consultationId, { fresh: true });
         }
 
         if (consultation.status !== CONSULTATION_STATUS.ACTIVE) {

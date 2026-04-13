@@ -296,6 +296,7 @@ export const prescriptions = {
   create: (d) =>
     req("/prescriptions", { method: "POST", body: JSON.stringify(d) }),
   getById: (id) => req(`/prescriptions/${id}`),
+  verify: (id) => req(`/prescriptions/verify/${id}`),
   updateStatus: (id, status) =>
     req(`/prescriptions/${id}/status`, {
       method: "PUT",

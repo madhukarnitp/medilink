@@ -4,6 +4,7 @@ const { body, param } = require('express-validator');
 const {
   createPrescription,
   getPrescriptionById,
+  verifyPrescription,
   updateStatus,
   getDoctorPrescriptions,
   cancelPrescription,
@@ -31,6 +32,8 @@ const updateStatusRules = [
 const idRules = [
   param('id').isMongoId().withMessage('Invalid prescription ID'),
 ];
+
+router.get('/verify/:id', idRules, validate, verifyPrescription);
 
 // Doctor: list own prescriptions & create
 router.get('/', protect, authorize(ROLES.DOCTOR), getDoctorPrescriptions);

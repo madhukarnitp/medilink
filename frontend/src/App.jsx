@@ -72,18 +72,45 @@ function PageRouter() {
 }
 
 function AppContent() {
-  const { dismissToast, isAuthenticated, loading, toasts, user } = useApp();
+  const {
+    activePage,
+    dismissToast,
+    isAuthenticated,
+    loading,
+    selectedPrescriptionId,
+    toasts,
+    user,
+  } = useApp();
   if (loading)
     return (
       <div className="spinner-page">
         <div className="spinner" />
       </div>
     );
+  const isPublicPrescription =
+    !isAuthenticated &&
+    activePage === PAGES.PRESCRIPTION &&
+    selectedPrescriptionId;
+
+  if (isPublicPrescription) {
+    return (
+      <>
+        <Suspense fallback={loadingFallback}>
+          <Prescription />
+        </Suspense>
+        <Toast onDismiss={dismissToast} toasts={toasts} />
+      </>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
-      <Suspense fallback={loadingFallback}>
-        <Login />
-      </Suspense>
+      <>
+        <Suspense fallback={loadingFallback}>
+          <Login />
+        </Suspense>
+        <Toast onDismiss={dismissToast} toasts={toasts} />
+      </>
     );
   }
 
