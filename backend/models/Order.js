@@ -4,6 +4,10 @@ const { ORDER_STATUS, PAYMENT_STATUS, PAYMENT_METHODS } = require('../utils/cons
 
 const orderItemSchema = new mongoose.Schema(
   {
+    medicine: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Medicine',
+    },
     name: {
       type: String,
       required: [true, 'Medicine name is required'],
@@ -23,6 +27,21 @@ const orderItemSchema = new mongoose.Schema(
       type: Number,
       min: [0, 'Unit price cannot be negative'],
       default: 0,
+    },
+    availabilityStatus: {
+      type: String,
+      enum: ['available', 'partial', 'out_of_stock', 'untracked'],
+      default: 'untracked',
+    },
+    availableQuantity: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    fulfillmentNote: {
+      type: String,
+      trim: true,
+      maxlength: [200, 'Fulfillment note cannot exceed 200 characters'],
     },
   },
   { _id: false }
@@ -165,6 +184,10 @@ const orderSchema = new mongoose.Schema(
     },
     deliveredAt: Date,
     cancelledAt: Date,
+    inventoryAdjusted: {
+      type: Boolean,
+      default: false,
+    },
     statusHistory: [statusHistorySchema],
   },
   {

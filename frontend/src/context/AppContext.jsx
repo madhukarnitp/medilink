@@ -7,7 +7,13 @@ import {
   useMemo,
   useRef,
 } from "react";
-import { auth as authApi, clearTokens } from "../services/api";
+import { useLocation, useNavigate as useRouterNavigate } from "react-router-dom";
+import {
+  auth as authApi,
+  clearTokens,
+  notifications as notificationsApi,
+  prescriptionSelection,
+} from "../services/api";
 import {
   connectSocket,
   disconnectSocket,
@@ -25,7 +31,9 @@ export const PAGES = {
   DASHBOARD: "dashboard",
   DOCTORS: "doctors",
   CONSULTATION: "consultation",
+  APPOINTMENTS: "appointments",
   PRESCRIPTION: "prescription",
+  PRESCRIPTION_VERIFY: "prescription_verify",
   PRESCRIPTION_LIST: "prescription_list",
   CONSULTATION_LIST: "consultation_list",
   RECORDS: "records",
@@ -36,6 +44,10 @@ export const PAGES = {
   CREATE_PRESCRIPTION: "create_prescription",
   DOCTOR_PRESCRIPTIONS: "doctor_prescriptions",
   ADMIN_DASHBOARD: "admin_dashboard",
+  ADMIN_USERS: "admin_users",
+  ADMIN_DOCTORS: "admin_doctors",
+  ADMIN_ORDERS: "admin_orders",
+  ADMIN_MEDICINES: "admin_medicines",
   NOT_FOUND: "not_found",
 };
 
@@ -45,20 +57,103 @@ const getHomePage = (role) => {
   return PAGES.DASHBOARD;
 };
 
+const PAGE_PATHS = {
+  [PAGES.DASHBOARD]: "/dashboard",
+  [PAGES.DOCTORS]: "/doctors",
+  [PAGES.CONSULTATION_LIST]: "/consultations",
+  [PAGES.APPOINTMENTS]: "/appointments",
+  [PAGES.PRESCRIPTION_LIST]: "/prescriptions",
+  [PAGES.RECORDS]: "/records",
+  [PAGES.ORDERS]: "/orders",
+  [PAGES.SOS]: "/sos",
+  [PAGES.PROFILE]: "/profile",
+  [PAGES.DOCTOR_DASHBOARD]: "/doctor/dashboard",
+  [PAGES.CREATE_PRESCRIPTION]: "/doctor/prescriptions/new",
+  [PAGES.DOCTOR_PRESCRIPTIONS]: "/doctor/prescriptions",
+  [PAGES.ADMIN_DASHBOARD]: "/admin",
+  [PAGES.ADMIN_USERS]: "/admin/users",
+  [PAGES.ADMIN_DOCTORS]: "/admin/doctors",
+  [PAGES.ADMIN_ORDERS]: "/admin/orders",
+  [PAGES.ADMIN_MEDICINES]: "/admin/medicines",
+  [PAGES.NOT_FOUND]: "/not-found",
+};
+
+const getPathForPage = (page, params = {}) => {
+  if (page === PAGES.PRESCRIPTION_VERIFY && params.prescriptionId) {
+    const token = params.verificationToken
+      ? `?token=${encodeURIComponent(params.verificationToken)}`
+      : "";
+    return `/verify/prescription/${encodeURIComponent(params.prescriptionId)}${token}`;
+  }
+  if (page === PAGES.PRESCRIPTION && params.prescriptionId) {
+    return `/prescription/${encodeURIComponent(params.prescriptionId)}`;
+  }
+  if (page === PAGES.PRESCRIPTION) {
+    return PAGE_PATHS[PAGES.PRESCRIPTION_LIST];
+  }
+  if (page === PAGES.CONSULTATION) {
+    if (!params.consultationId) return "/consultation";
+    const mode = params.mode === "call" ? "/call" : "";
+    return `/consultation/${encodeURIComponent(params.consultationId)}${mode}`;
+  }
+  const basePath = PAGE_PATHS[page] || PAGE_PATHS[PAGES.NOT_FOUND];
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || typeof value === "object") return;
+    query.set(key, String(value));
+  });
+  const queryString = query.toString();
+  return queryString ? `${basePath}?${queryString}` : basePath;
+};
+
 const getDeepLinkTarget = () => {
   if (typeof window === "undefined") return null;
 
   const rawHash = window.location.hash.replace(/^#\/?/, "");
   const source = rawHash || window.location.pathname.replace(/^\/+/, "");
   const [route] = source.split(/[?#]/);
+  const hashQuery = source.includes("?") ? source.split("?")[1].split("#")[0] : "";
   const parts = route.split("/").filter(Boolean);
 
   if (parts.length === 0) return null;
+  if (parts[0] === "login") return null;
+
+  const query = new URLSearchParams(hashQuery || window.location.search);
+  const queryParams = Object.fromEntries(query.entries());
+
+  if (
+    parts[0] === "verify" &&
+    (parts[1] === "prescription" || parts[1] === "rx") &&
+    parts[2]
+  ) {
+    return {
+      page: PAGES.PRESCRIPTION_VERIFY,
+      params: {
+        prescriptionId: decodeURIComponent(parts[2]),
+        verificationToken: queryParams.token,
+        publicVerification: true,
+      },
+    };
+  }
+
+  if (parts[0] === "verify" && parts[1]) {
+    return {
+      page: PAGES.PRESCRIPTION_VERIFY,
+      params: {
+        prescriptionId: decodeURIComponent(parts[1]),
+        verificationToken: queryParams.token,
+        publicVerification: true,
+      },
+    };
+  }
 
   if (parts[0] === "prescription" && parts[1]) {
     return {
       page: PAGES.PRESCRIPTION,
-      params: { prescriptionId: decodeURIComponent(parts[1]) },
+      params: {
+        prescriptionId: decodeURIComponent(parts[1]),
+        publicDetail: true,
+      },
     };
   }
 
@@ -70,6 +165,35 @@ const getDeepLinkTarget = () => {
         mode: parts[2] === "call" ? "call" : "chat",
       },
     };
+  }
+
+  if (parts[0] === "dashboard") return { page: PAGES.DASHBOARD };
+  if (parts[0] === "doctors") return { page: PAGES.DOCTORS, params: queryParams };
+  if (parts[0] === "consultation") return { page: PAGES.CONSULTATION };
+  if (parts[0] === "consultations") return { page: PAGES.CONSULTATION_LIST };
+  if (parts[0] === "appointments") {
+    return { page: PAGES.APPOINTMENTS, params: queryParams };
+  }
+  if (parts[0] === "prescriptions") return { page: PAGES.PRESCRIPTION_LIST };
+  if (parts[0] === "records") return { page: PAGES.RECORDS };
+  if (parts[0] === "orders") return { page: PAGES.ORDERS };
+  if (parts[0] === "sos") return { page: PAGES.SOS };
+  if (parts[0] === "profile") return { page: PAGES.PROFILE };
+  if (parts[0] === "admin") {
+    if (parts[1] === "users") return { page: PAGES.ADMIN_USERS };
+    if (parts[1] === "doctors") return { page: PAGES.ADMIN_DOCTORS };
+    if (parts[1] === "orders") return { page: PAGES.ADMIN_ORDERS };
+    if (parts[1] === "medicines") return { page: PAGES.ADMIN_MEDICINES };
+    return { page: PAGES.ADMIN_DASHBOARD };
+  }
+  if (parts[0] === "doctor" && parts[1] === "dashboard") {
+    return { page: PAGES.DOCTOR_DASHBOARD };
+  }
+  if (parts[0] === "doctor" && parts[1] === "prescriptions" && parts[2] === "new") {
+    return { page: PAGES.CREATE_PRESCRIPTION };
+  }
+  if (parts[0] === "doctor" && parts[1] === "prescriptions") {
+    return { page: PAGES.DOCTOR_PRESCRIPTIONS };
   }
 
   return {
@@ -85,15 +209,28 @@ const getToastTypeForNotification = (type) => {
   if (type === "message" || type === "consultation_ended") {
     return "info";
   }
-  if (type === "consultation_accepted") {
+  if (type === "consultation_accepted" || type === "appointment") {
     return "success";
   }
   return "info";
 };
 
+const normalizeNotification = (item = {}) => ({
+  id: item.id || item._id,
+  title: item.title || "MediLink notification",
+  body: item.body || item.message || "Open MediLink for details.",
+  type: item.type || "general",
+  page: item.page,
+  params: item.params,
+  createdAt: item.createdAt || new Date().toISOString(),
+  readAt: item.readAt || null,
+});
+
 const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
+  const location = useLocation();
+  const routerNavigate = useRouterNavigate();
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -126,8 +263,14 @@ export function AppProvider({ children }) {
     setActivePage(page);
     setPageParams(params);
     if (params.doctor !== undefined) setSelectedDoctor(params.doctor);
-    if (params.prescriptionId !== undefined) {
+    const isPrescriptionPage =
+      page === PAGES.PRESCRIPTION || page === PAGES.PRESCRIPTION_VERIFY;
+    if (isPrescriptionPage && params.prescriptionId !== undefined) {
       setSelectedPrescriptionId(params.prescriptionId);
+      prescriptionSelection.set(params.prescriptionId);
+    } else {
+      setSelectedPrescriptionId(null);
+      prescriptionSelection.clear();
     }
     if (page === PAGES.CONSULTATION && params.consultationId === undefined) {
       setSelectedConsultationId(null);
@@ -144,6 +287,7 @@ export function AppProvider({ children }) {
         const target = pendingDeepLinkRef.current;
         if (
           target?.page === PAGES.PRESCRIPTION ||
+          target?.page === PAGES.PRESCRIPTION_VERIFY ||
           target?.page === PAGES.NOT_FOUND
         ) {
           applyNavigationTarget(target.page, target.params || {});
@@ -172,22 +316,58 @@ export function AppProvider({ children }) {
         setProfile(res.data.profile);
         localStorage.setItem("ml_user", JSON.stringify(res.data.user));
         setIsAuthenticated(true);
-        applyNavigationTarget(
-          target?.page || getHomePage(res.data.user.role),
-          target?.params || {},
-        );
+        if (!saved || target) {
+          applyNavigationTarget(
+            target?.page || getHomePage(res.data.user.role),
+            target?.params || {},
+          );
+        }
         pendingDeepLinkRef.current = null;
         connectSocket(token);
       } catch {
+        const target = pendingDeepLinkRef.current;
         setIsAuthenticated(false);
         setUser(null);
         clearTokens();
+        if (
+          target?.page === PAGES.PRESCRIPTION ||
+          target?.page === PAGES.PRESCRIPTION_VERIFY ||
+          target?.page === PAGES.NOT_FOUND
+        ) {
+          applyNavigationTarget(target.page, target.params || {});
+        } else {
+          routerNavigate("/login", { replace: true });
+        }
       } finally {
         if (!saved) setLoading(false);
       }
     })();
     return () => disconnectSocket();
-  }, [applyNavigationTarget]);
+  }, [applyNavigationTarget, routerNavigate]);
+
+  useEffect(() => {
+    if (loading) return;
+    const target = getDeepLinkTarget();
+    if (!target) return;
+
+    if (
+      !isAuthenticated &&
+      target.page !== PAGES.PRESCRIPTION &&
+      target.page !== PAGES.PRESCRIPTION_VERIFY &&
+      target.page !== PAGES.NOT_FOUND
+    ) {
+      return;
+    }
+
+    applyNavigationTarget(target.page, target.params || {});
+  }, [
+    applyNavigationTarget,
+    isAuthenticated,
+    loading,
+    location.hash,
+    location.pathname,
+    location.search,
+  ]);
 
   const dismissToast = useCallback((id) => {
     const timer = toastTimers.current.get(id);
@@ -254,15 +434,37 @@ export function AppProvider({ children }) {
     return Notification.permission;
   }, [showToast]);
 
-  const clearNotifications = useCallback(() => {
-    setNotifications(0);
-    setNotificationItems([]);
+  const loadNotifications = useCallback(async () => {
+    if (!localStorage.getItem("ml_token")) return;
+    try {
+      const response = await notificationsApi.getAll({ limit: 30 });
+      const items = (response.data?.items || []).map(normalizeNotification);
+      setNotificationItems(items);
+      setNotifications(response.data?.unread ?? items.filter((item) => !item.readAt).length);
+    } catch {}
   }, []);
 
-  const dismissNotification = useCallback((id) => {
+  const clearNotifications = useCallback(async () => {
+    setNotifications(0);
+    setNotificationItems([]);
+    try {
+      await notificationsApi.clear();
+    } catch {}
+  }, []);
+
+  const dismissNotification = useCallback(async (id) => {
     setNotificationItems((items) => items.filter((item) => item.id !== id));
     setNotifications((count) => Math.max(0, count - 1));
+    if (id && !String(id).includes("-")) {
+      try {
+        await notificationsApi.remove(id);
+      } catch {}
+    }
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) loadNotifications();
+  }, [isAuthenticated, loadNotifications]);
 
   const onSocketConnectError = useCallback(
     (error) => {
@@ -295,37 +497,50 @@ export function AppProvider({ children }) {
       // Connect socket right after login
       const token = localStorage.getItem("ml_token");
       const target = pendingDeepLinkRef.current;
+      const nextPage = target?.page || getHomePage(data.user.role);
+      const nextParams = target?.params || {};
       connectSocket(token);
       setUser(data.user);
       setIsAuthenticated(true);
-      applyNavigationTarget(
-        target?.page || getHomePage(data.user.role),
-        target?.params || {},
-      );
+      applyNavigationTarget(nextPage, nextParams);
+      routerNavigate(getPathForPage(nextPage, nextParams), { replace: true });
       pendingDeepLinkRef.current = null;
+      loadNotifications();
       showToast(`Welcome back, ${data.user.name.split(" ")[0]}!`);
       return data;
     },
-    [applyNavigationTarget, showToast],
+    [applyNavigationTarget, loadNotifications, routerNavigate, showToast],
   );
 
   const logout = useCallback(async () => {
     disconnectSocket();
     await authApi.logout();
+    pendingDeepLinkRef.current = null;
+    prescriptionSelection.clear();
     setUser(null);
     setProfile(null);
     setIsAuthenticated(false);
     setActivePage(null);
+    setPageParams({});
     setSelectedDoctor(null);
+    setSelectedPrescriptionId(null);
+    setSelectedConsultationId(null);
+    setNotifications(0);
+    setNotificationItems([]);
+    routerNavigate("/login", { replace: true });
     showToast("Logged out successfully");
-  }, [showToast]);
+  }, [routerNavigate, showToast]);
 
   const navigate = useCallback(
-    (page, params = {}) => {
+    (page, params = {}, options = {}) => {
       pendingDeepLinkRef.current = null;
       applyNavigationTarget(page, params);
+      const nextPath = getPathForPage(page, params);
+      if (nextPath && `${location.pathname}${location.search}` !== nextPath) {
+        routerNavigate(nextPath, { replace: Boolean(options.replace) });
+      }
     },
-    [applyNavigationTarget],
+    [applyNavigationTarget, location.pathname, location.search, routerNavigate],
   );
 
   const acceptIncomingCall = useCallback(() => {

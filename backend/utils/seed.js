@@ -14,6 +14,7 @@ const users = [
   { name: 'Dr. Sunita Rao', email: 'doctor3@medilink.com', password, role: 'doctor', phone: '+919876500003', isEmailVerified: true, isActive: true },
   { name: 'Dr. Vikram Singh', email: 'doctor4@medilink.com', password, role: 'doctor', phone: '+919876500004', isEmailVerified: true, isActive: true },
   { name: 'Dr. Meera Nair', email: 'doctor5@medilink.com', password, role: 'doctor', phone: '+919876500005', isEmailVerified: true, isActive: true },
+  { name: 'Madhukar Kumar', email: 'admin@medilink.com', password, role: 'admin', phone: '+919876500005', isEmailVerified: true, isActive: true },
 ];
 
 const patientProfiles = (userIds) => [

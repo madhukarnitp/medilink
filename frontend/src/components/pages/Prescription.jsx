@@ -1,11 +1,93 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useApp, PAGES } from "../../context/AppContext";
 import { Button, Spinner, ErrorMsg } from "../ui/UI";
 import {
   prescriptions as rxApi,
   patients as patientsApi,
+  prescriptionCache,
+  prescriptionSelection,
 } from "../../services/api";
+import {
+  formatPrescriptionDate,
+  generatePrescriptionPdf,
+} from "../../services/prescriptionPdf";
+import medilinkLogo from "../../assets/logo.png";
 import styles from "./CSS/Prescription.module.css";
+
+const getPrescriptionIdFromLocation = (location) => {
+  try {
+    const parts = getRouteParts(location);
+
+    if (
+      parts[0] === "verify" &&
+      (parts[1] === "prescription" || parts[1] === "rx") &&
+      parts[2]
+    ) {
+      return decodeURIComponent(parts[2]);
+    }
+
+    if (parts[0] === "verify" && parts[1]) {
+      return decodeURIComponent(parts[1]);
+    }
+
+    if (parts[0] === "prescription" && parts[1]) {
+      return decodeURIComponent(parts[1]);
+    }
+
+    const lastPart = parts.at(-1) || "";
+    return /^[a-f0-9]{24}$/i.test(lastPart)
+      ? decodeURIComponent(lastPart)
+      : "";
+  } catch {
+    return "";
+  }
+};
+
+const getRouteParts = (location) => {
+  const hash =
+    location?.hash ??
+    (typeof window !== "undefined" ? window.location.hash : "");
+  const pathname =
+    location?.pathname ??
+    (typeof window !== "undefined" ? window.location.pathname : "");
+  const rawHash = hash.replace(/^#\/?/, "");
+  const source = rawHash || pathname.replace(/^\/+/, "");
+  const [route] = source.split(/[?#]/);
+  return route.split("/").filter(Boolean);
+};
+
+const isPublicPrescriptionRoute = (location) => {
+  const parts = getRouteParts(location);
+  return parts[0] === "prescription" && Boolean(parts[1]);
+};
+
+const getVerificationTokenFromLocation = (location) => {
+  const hash = location?.hash ?? (typeof window !== "undefined" ? window.location.hash : "");
+  const search =
+    location?.search ?? (typeof window !== "undefined" ? window.location.search : "");
+  const hashQuery = hash.includes("?") ? hash.split("?")[1].split("#")[0] : "";
+  return new URLSearchParams(hashQuery || search).get("token") || "";
+};
+
+const hasItems = (items) => Array.isArray(items) && items.length > 0;
+
+const getPublicPrescriptionUrl = (id, token = "") => {
+  const query = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${window.location.origin}/#/verify/prescription/${id}${query}`;
+};
+
+const createQrCodeDataUrl = async (id, token = "", width = 120) => {
+  const QRCode = (await import("qrcode")).default;
+  return QRCode.toDataURL(getPublicPrescriptionUrl(id, token), {
+    width,
+    margin: 1,
+    color: {
+      dark: "#000000",
+      light: "#FFFFFF",
+    },
+  });
+};
 
 const statusDisplay = (s) =>
   ({
@@ -31,49 +113,149 @@ const statusDisplay = (s) =>
   };
 
 export default function Prescription() {
-  const { navigate, user, selectedPrescriptionId } = useApp();
-  const [rx, setRx] = useState(null);
+  const location = useLocation();
+  const {
+    navigate,
+    activePage,
+    pageParams,
+    selectedPrescriptionId,
+    setSelectedPrescriptionId,
+    showToast,
+    user,
+  } = useApp();
+  const routePrescriptionId = useMemo(
+    () => getPrescriptionIdFromLocation(location),
+    [location],
+  );
+  const routeVerificationToken = useMemo(
+    () => getVerificationTokenFromLocation(location),
+    [location],
+  );
+  const prescriptionId =
+    [
+      routePrescriptionId,
+      pageParams?.prescriptionId,
+      selectedPrescriptionId,
+      prescriptionSelection.get(),
+    ]
+      .map((id) => String(id || "").trim())
+      .find(Boolean) || "";
+  const verificationToken =
+    pageParams?.verificationToken || routeVerificationToken || "";
+  const routePrescription = pageParams?.prescription || null;
+  const [rx, setRx] = useState(
+    () => routePrescription || prescriptionCache.getById(prescriptionId),
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [qrCodeUrl, setQrCodeUrl] = useState("");
-  const isPublicVerification = !user;
+  const isVerificationView =
+    activePage === PAGES.PRESCRIPTION_VERIFY ||
+    pageParams?.publicVerification === true;
+  const routePublicDetailView = isPublicPrescriptionRoute(location);
+  const isPublicDetailView =
+    routePublicDetailView ||
+    pageParams?.publicDetail === true ||
+    (!user && !isVerificationView);
+
+  const goBackToPrescriptions = () => {
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
+    if (isVerificationView && user) {
+      navigate(
+        user.role === "doctor" ? PAGES.DOCTOR_DASHBOARD : PAGES.DASHBOARD,
+        {},
+        { replace: true },
+      );
+      return;
+    }
+    prescriptionSelection.clear();
+    navigate(
+      user.role === "doctor"
+        ? PAGES.DOCTOR_PRESCRIPTIONS
+        : PAGES.PRESCRIPTION_LIST,
+    );
+  };
 
   useEffect(() => {
-    if (!selectedPrescriptionId) {
+    if (prescriptionId && prescriptionId !== selectedPrescriptionId) {
+      setSelectedPrescriptionId(prescriptionId);
+    }
+    if (prescriptionId) {
+      prescriptionSelection.set(prescriptionId);
+    }
+  }, [prescriptionId, selectedPrescriptionId, setSelectedPrescriptionId]);
+
+  useEffect(() => {
+    if (!prescriptionId) {
       setRx(null);
       setLoading(false);
       return;
     }
 
+    const cachedPrescription =
+      routePrescription || prescriptionCache.getById(prescriptionId);
+    const canUseCachedPrescription =
+      cachedPrescription && !isVerificationView && !isPublicDetailView;
+    setRx(cachedPrescription);
+    setLoading(!cachedPrescription);
     let ignore = false;
-    setLoading(true);
     setError("");
     setQrCodeUrl("");
 
+    if (canUseCachedPrescription) {
+      (async () => {
+        try {
+          const qrUrl = await createQrCodeDataUrl(
+            cachedPrescription._id,
+            cachedPrescription.publicVerification?.token,
+          );
+          if (!ignore) setQrCodeUrl(qrUrl);
+        } catch {}
+      })();
+      return () => {
+        ignore = true;
+      };
+    }
+
     (async () => {
       try {
-        const r =
-          user?.role === "doctor"
-            ? await rxApi.getById(selectedPrescriptionId)
-            : user?.role === "patient"
-              ? await patientsApi.getPrescriptionById(selectedPrescriptionId)
-              : await rxApi.verify(selectedPrescriptionId);
+        const r = isVerificationView
+          ? await rxApi.verify(prescriptionId, verificationToken)
+          : await rxApi.getPublicById(prescriptionId);
         if (ignore) return;
         setRx(r.data);
+        if (!isVerificationView && !isPublicDetailView && user) {
+          prescriptionCache.saveItem(r.data);
+        }
 
-        const QRCode = (await import("qrcode")).default;
-        const prescriptionUrl = `${window.location.origin}/#/prescription/${r.data._id}`;
-        const qrUrl = await QRCode.toDataURL(prescriptionUrl, {
-          width: 120,
-          margin: 1,
-          color: {
-            dark: '#000000',
-            light: '#FFFFFF'
-          }
-        });
+        const qrUrl = await createQrCodeDataUrl(
+          r.data._id,
+          r.data.publicVerification?.token,
+        );
         if (!ignore) setQrCodeUrl(qrUrl);
+
+        if (!isVerificationView && !isPublicDetailView && user?.role) {
+          try {
+            const privateResponse =
+              user.role === "doctor"
+                ? await rxApi.getById(prescriptionId)
+                : user.role === "patient"
+                  ? await patientsApi.getPrescriptionById(prescriptionId)
+                  : null;
+            if (!ignore && privateResponse?.data) {
+              setRx(privateResponse.data);
+              prescriptionCache.saveItem(privateResponse.data);
+            }
+          } catch {}
+        }
       } catch (e) {
-        if (!ignore) setError(e.message);
+        if (!ignore) {
+          setError(e.message);
+          setRx((current) => current || cachedPrescription || null);
+        }
       } finally {
         if (!ignore) setLoading(false);
       }
@@ -82,7 +264,19 @@ export default function Prescription() {
     return () => {
       ignore = true;
     };
-  }, [selectedPrescriptionId, user?.role]);
+  }, [
+    isVerificationView,
+    isPublicDetailView,
+    prescriptionId,
+    routePrescription,
+    user?.role,
+    verificationToken,
+  ]);
+
+  useEffect(() => {
+    if (!user || prescriptionId || loading) return;
+    goBackToPrescriptions();
+  }, [loading, prescriptionId, user]);
 
   if (loading)
     return (
@@ -92,31 +286,32 @@ export default function Prescription() {
         </div>
       </div>
     );
-  if (error && isPublicVerification)
+  if (error && !rx && (isVerificationView || isPublicDetailView))
     return (
       <PublicVerificationState
         message={error}
         onHome={() => {
-          window.location.href = "/";
+          window.location.href = "/login";
         }}
       />
     );
-  if (error)
+  if (error && !rx)
     return (
       <div className={styles.page}>
-        <ErrorMsg message={error} />
+        <ErrorMsg message={error} onRetry={goBackToPrescriptions} />
       </div>
     );
-  if (!rx)
-    if (isPublicVerification)
+  if (!rx) {
+    if (isVerificationView || isPublicDetailView) {
       return (
         <PublicVerificationState
-          message="No prescription record was found for this QR code."
+          message="Prescription not found"
           onHome={() => {
-            window.location.href = "/";
+            window.location.href = "/login";
           }}
         />
       );
+    }
     return (
       <div className={styles.page}>
         <div className={styles.empty}>
@@ -124,23 +319,18 @@ export default function Prescription() {
           <br />
           <button
             className={styles.emptyBackButton}
-            onClick={() => {
-              if (!user) window.location.href = "/";
-              else
-                navigate(
-                  user?.role === "doctor"
-                    ? PAGES.DOCTOR_PRESCRIPTIONS
-                    : PAGES.PRESCRIPTION_LIST,
-                );
-            }}
+            onClick={goBackToPrescriptions}
           >
             ← Go back
           </button>
         </div>
       </div>
     );
+  }
 
   const sd = statusDisplay(rx.status);
+  const verification = rx.verification;
+  const isVerified = Boolean(verification?.verified);
   const docName =
     rx.createdBy?.userId?.name ||
     rx.doctor?.userId?.name ||
@@ -151,108 +341,131 @@ export default function Prescription() {
     rx.patient?.userId?.name ||
     rx.patient?.name ||
     (user?.role === "patient" ? user?.name : "Patient");
+  const verificationUrl = getPublicPrescriptionUrl(
+    rx._id,
+    rx.publicVerification?.token,
+  );
+
+  const handleCopyVerificationLink = async () => {
+    try {
+      await navigator.clipboard.writeText(verificationUrl);
+      showToast("Verification link copied");
+    } catch {
+      showToast("Could not copy link automatically", "warning");
+    }
+  };
+
+  const issuedLabel = formatPrescriptionDate(rx.createdAt);
+  const expiryLabel = formatPrescriptionDate(rx.expiresAt, "Not set");
 
   const handleDownloadPDF = async () => {
-    const element = document.getElementById("prescription-card");
-    if (!element) return;
-
-    // Generate QR code
-    const QRCode = (await import("qrcode")).default;
-    const qrCanvas = document.createElement("canvas");
-    const prescriptionUrl = `${window.location.origin}/#/prescription/${rx._id}`;
-    await QRCode.toCanvas(qrCanvas, prescriptionUrl, {
-      width: 100,
-      margin: 1,
-      color: {
-        dark: '#000000',
-        light: '#FFFFFF'
-      }
-    });
-
-    // Add QR code to the prescription element temporarily
-    const qrContainer = document.createElement("div");
-    qrContainer.style.cssText = `
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      text-align: center;
-      font-size: 10px;
-      color: #666;
-    `;
-    qrContainer.innerHTML = `
-      <div>Scan to verify</div>
-      <img src="${qrCanvas.toDataURL()}" style="width: 80px; height: 80px; margin: 5px 0;" />
-      <div style="font-size: 8px;">ID: ${rx.rxId}</div>
-    `;
-
-    element.style.position = "relative";
-    element.appendChild(qrContainer);
-
-    const html2pdf = (await import("html2pdf.js")).default;
-    html2pdf()
-      .from(element)
-      .set({
-        margin: 10,
-        filename: `Prescription_${rx.rxId || "Document"}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          ignoreElements: (el) => el.id === "pdf-actions",
-        },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      })
-      .save()
-      .finally(() => {
-        // Remove QR code after PDF generation
-        element.removeChild(qrContainer);
-        element.style.position = "";
+    try {
+      await generatePrescriptionPdf({
+        rx,
+        docName,
+        patName,
+        statusText: sd.text,
+        verificationUrl,
+        qrCodeUrl,
+        logoUrl: medilinkLogo,
+        userRole: user?.role,
       });
+    } catch (e) {
+      showToast(e.message || "Could not generate the PDF", "error");
+    }
   };
 
   return (
-    <div className={styles.page}>
+    <div
+      className={
+        isVerificationView || isPublicDetailView
+          ? `${styles.page} ${styles.publicSuccessPage}`
+          : `${styles.page} ${styles.detailPage}`
+      }
+    >
+      {(isVerificationView || isPublicDetailView) && (
+        <section
+          className={`${styles.publicHero} ${
+            isVerified ? styles.publicHeroValid : styles.publicHeroInvalid
+          }`}
+        >
+          <div className={styles.publicHeroMark}>
+            {isVerified ? "OK" : "!"}
+          </div>
+          <div className={styles.publicHeroContent}>
+            <span className={styles.verifyEyebrow}>
+              Prescription verification
+            </span>
+            <h1>
+              {isVerified
+                ? "Verified MediLink prescription"
+                : "Prescription record found"}
+            </h1>
+            <p>
+              {verification?.reason ||
+                "MediLink checked this prescription against the issuing doctor and prescription status."}
+            </p>
+          </div>
+          <div className={styles.publicHeroMeta}>
+            <span>Checked</span>
+            <strong>
+              {verification?.checkedAt
+                ? new Date(verification.checkedAt).toLocaleString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "Just now"}
+            </strong>
+          </div>
+        </section>
+      )}
       <div className={styles.greeting}>
         <div className={styles.backBtn}>
           <button
-            onClick={() => {
-              if (!user) window.location.href = "/";
-              else
-                navigate(
-                  user?.role === "doctor"
-                    ? PAGES.DOCTOR_PRESCRIPTIONS
-                    : PAGES.PRESCRIPTION_LIST,
-                );
-            }}
+            onClick={goBackToPrescriptions}
           >
-            ← Back
+            {isVerificationView || isPublicDetailView ? "Go to MediLink" : "← Back"}
           </button>
         </div>
         <div>
-          <h1>{isPublicVerification ? "Prescription Verification" : "Prescription"}</h1>
+          <h1>{isVerificationView ? "Prescription Verification" : "Prescription"}</h1>
           <p>
-            Issued by {docName} ·{" "}
-            {new Date(rx.createdAt).toLocaleDateString("en-IN", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })}
+            Issued by {docName} · Issued {issuedLabel} · Expires {expiryLabel}
           </p>
+          <div className={styles.headerChips}>
+            <span className={styles.headerChip}>{rx.rxId || "MediLink Rx"}</span>
+            <span className={styles.headerChip}>{sd.text}</span>
+            <span className={styles.headerChip}>Expires {expiryLabel}</span>
+            <span className={styles.headerChip}>QR verification ready</span>
+          </div>
         </div>
       </div>
       <div className={styles.card} id="prescription-card">
         <div className={styles.rxHeader}>
           <div>
-            <div className={styles.rxLogo}>MediLink</div>
+            <div className={styles.rxBrand}>
+              <img
+                className={styles.rxLogoImage}
+                src={medilinkLogo}
+                alt="MediLink logo"
+              />
+              <div>
+                <div className={styles.rxLogo}>MediLink</div>
+                <div className={styles.rxBrandSub}>Digital prescription</div>
+              </div>
+            </div>
             <div className={styles.rxId}>{rx.rxId}</div>
           </div>
           <div className={styles.rxDate}>
-            <div className={styles.rxDateLabel}>Date</div>
-            <div className={styles.rxDateVal}>
-              {new Date(rx.createdAt).toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })}
+            <div className={styles.rxDateGroup}>
+              <div className={styles.rxDateLabel}>Issued</div>
+              <div className={styles.rxDateVal}>{issuedLabel}</div>
+            </div>
+            <div className={styles.rxDateGroup}>
+              <div className={styles.rxDateLabel}>Expires</div>
+              <div className={styles.rxDateVal}>{expiryLabel}</div>
             </div>
           </div>
           <div className={styles.qrSection}>
@@ -260,21 +473,16 @@ export default function Prescription() {
               {qrCodeUrl && <img src={qrCodeUrl} alt="Prescription QR Code" />}
             </div>
             <div className={styles.qrLabel}>Scan to verify</div>
+            <div className={styles.qrId}>ID: {rx.rxId || rx._id}</div>
           </div>
           <div className={`${styles.statusBadge} ${sd.badgeClassName}`}>
             {sd.text}
           </div>
         </div>
-        {rx.verification?.verified && (
-          <div className={styles.successBanner}>
-            Verified MediLink prescription. Checked{" "}
-            {new Date(rx.verification.checkedAt).toLocaleString("en-IN", {
-              day: "numeric",
-              month: "short",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-            .
+        {verification && (
+          <div className={isVerified ? styles.successBanner : styles.warningBanner}>
+            {isVerified ? "Verified" : "Verification notice"}:{" "}
+            {verification.reason || "Prescription record was checked."}
           </div>
         )}
         {rx.status === "expired" && (
@@ -307,23 +515,13 @@ export default function Prescription() {
           <div className={styles.validityItem}>
             <span className={styles.label}>Issued</span>
             <span className={styles.value}>
-              {new Date(rx.createdAt).toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })}
+              {issuedLabel}
             </span>
           </div>
           <div className={styles.validityItem}>
             <span className={styles.label}>Expires</span>
-            <span className={styles.value}>
-              {rx.expiresAt
-                ? new Date(rx.expiresAt).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })
-                : "—"}
+            <span className={`${styles.value} ${styles.expiryValue}`}>
+              {expiryLabel}
             </span>
           </div>
           <div className={styles.validityItem}>
@@ -335,6 +533,9 @@ export default function Prescription() {
         </div>
         <div className={styles.tableWrap}>
           <div className={styles.diagnosis}>Diagnosis: {rx.diagnosis}</div>
+          {hasItems(rx.symptoms) && (
+            <DetailList title="Symptoms" items={rx.symptoms} />
+          )}
           <table className={styles.table}>
             <thead>
               <tr>
@@ -342,6 +543,7 @@ export default function Prescription() {
                 <th>Dosage</th>
                 <th>Frequency</th>
                 <th>Duration</th>
+                <th>Instructions</th>
               </tr>
             </thead>
             <tbody>
@@ -351,10 +553,14 @@ export default function Prescription() {
                   <td>{m.dosage}</td>
                   <td>{m.frequency}</td>
                   <td>{m.duration}</td>
+                  <td>{m.instructions || "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {hasItems(rx.labTests) && (
+            <DetailList title="Recommended Lab Tests" items={rx.labTests} />
+          )}
           {rx.advice && (
             <div className={styles.instructions}>
               <div className={styles.instructionsLabel}>Instructions</div>
@@ -366,12 +572,14 @@ export default function Prescription() {
               <span className={styles.followUpIcon}>📅</span>
               <span>
                 Follow-up:{" "}
-                {new Date(rx.followUpDate).toLocaleDateString("en-IN", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
+                {formatPrescriptionDate(rx.followUpDate)}
               </span>
+            </div>
+          )}
+          {rx.notes && user?.role === "doctor" && (
+            <div className={styles.notes}>
+              <div className={styles.notesLabel}>Doctor Notes</div>
+              <div className={styles.notesText}>{rx.notes}</div>
             </div>
           )}
         </div>
@@ -379,12 +587,30 @@ export default function Prescription() {
           <Button variant="outline" onClick={handleDownloadPDF}>
             Download PDF
           </Button>
+          <Button variant="outline" onClick={handleCopyVerificationLink}>
+            Copy Verification Link
+          </Button>
           {rx.status === "active" && user?.role === "patient" && (
             <Button variant="primary" onClick={() => navigate(PAGES.ORDERS)}>
               Order Medicines
             </Button>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailList({ title, items }) {
+  return (
+    <div className={styles.detailBlock}>
+      <div className={styles.detailTitle}>{title}</div>
+      <div className={styles.detailPills}>
+        {items.map((item, index) => (
+          <span key={`${item}-${index}`} className={styles.detailPill}>
+            {item}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -402,7 +628,7 @@ function PublicVerificationState({ message, onHome }) {
           <h1>{isNotFound ? "Prescription not found" : "Verification failed"}</h1>
           <p>
             {isNotFound
-              ? "This QR code does not match an active MediLink prescription record."
+              ? "This prescription link does not match a MediLink prescription record."
               : "MediLink could not verify this prescription right now. Check the QR code or try again."}
           </p>
           <div className={styles.verifyReason}>

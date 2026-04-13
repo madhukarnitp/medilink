@@ -3,19 +3,22 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
 
+const { closeDatabase, connectDatabase, getDatabaseStatus } = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const { registerSocketHandlers } = require('./socket/handlers');
 const { swaggerUi, swaggerSpec, swaggerUiOptions } = require('./config/swagger');
+const Prescription = require('./models/Prescription');
+const { createPrescriptionVerificationToken } = require('./utils/prescriptionVerification');
 
 // ── App setup ─────────────────────────────────────────────────────────────────
 const app = express();
+app.disable('etag');
 let server = null;
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -26,6 +29,8 @@ const prescriptionRoutes = require('./routes/prescriptions');
 const consultationRoutes = require('./routes/consultations');
 const orderRoutes = require('./routes/orders');
 const adminRoutes = require('./routes/admin');
+const notificationRoutes = require('./routes/notifications');
+const appointmentRoutes = require('./routes/appointments');
 
 // ── Socket.io helpers ─────────────────────────────────────────────────────────
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
@@ -97,10 +102,19 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(mongoSanitize());
 
+// API responses are cached intentionally in the frontend. Disable browser
+// conditional caching so fetch never receives body-less 304 responses.
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 // ── Request logging ───────────────────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('combined', {
-    stream: { write: (msg) => console.log(msg.trim()) },
+    stream: { write: (msg) => console.log(msg) },
     skip: (req) => req.path === '/api/health',
   }));
 }
@@ -112,7 +126,7 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
-    db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    db: getDatabaseStatus(),
     environment: process.env.NODE_ENV || 'development',
   });
 });
@@ -126,11 +140,27 @@ app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/consultations', consultationRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/appointments', appointmentRoutes);
 
-app.get('/prescription/:id', (req, res) => {
-  const clientUrl = process.env.CLIENT_URL || allowedOrigins[0] || 'http://localhost:3000';
-  res.redirect(302, `${clientUrl.replace(/\/$/, '')}/#/prescription/${encodeURIComponent(req.params.id)}`);
-});
+const redirectToPrescriptionVerification = async (req, res, next) => {
+  try {
+    const clientUrl = process.env.CLIENT_URL || allowedOrigins[0] || 'http://localhost:3000';
+    const baseUrl = clientUrl.replace(/\/$/, '');
+    const prescription = await Prescription.findById(req.params.id).select('rxId createdAt').lean();
+    const token = prescription ? createPrescriptionVerificationToken(prescription) : '';
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    res.redirect(302, `${baseUrl}/#/verify/prescription/${encodeURIComponent(req.params.id)}${query}`);
+  } catch (err) {
+    next(err);
+  }
+};
+
+app.get('/prescription/:id', redirectToPrescriptionVerification);
+
+app.get('/verify/prescription/:id', redirectToPrescriptionVerification);
+
+app.get('/verify/rx/:id', redirectToPrescriptionVerification);
 
 app.get('/consultation/:id', (req, res) => {
   const clientUrl = process.env.CLIENT_URL || allowedOrigins[0] || 'http://localhost:3000';
@@ -145,41 +175,28 @@ app.use((req, res) => {
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use(errorHandler);
 
-// ── MongoDB connection ────────────────────────────────────────────────────────
-const connectDB = async () => {
-  try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/medilink', {
-      serverSelectionTimeoutMS: 5000,
-    });
-    console.log(`MongoDB connected: ${conn.connection.host}`);
-  } catch (err) {
-    console.error(`MongoDB connection failed: ${err.message}`);
-    process.exit(1);
-  }
-};
-
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
 const shutdown = async (signal) => {
-  console.log(`${signal} received — shutting down gracefully`);
+  console.log(`[server] ${signal} received. Starting graceful shutdown.`);
 
   if (server) {
     server.close(async () => {
-      await mongoose.connection.close();
-      console.log('Server closed');
+      await closeDatabase();
+      console.log('[server] HTTP server closed');
       process.exit(0);
     });
     setTimeout(() => process.exit(1), 10000); // force after 10s
     return;
   }
 
-  await mongoose.connection.close();
+  await closeDatabase();
   process.exit(0);
 };
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
 process.on('unhandledRejection', (err) => {
-  console.error(`Unhandled rejection: ${err.message}`);
+  console.error(`[process] Unhandled rejection: ${err.message}`);
   shutdown('unhandledRejection');
 });
 
@@ -188,13 +205,15 @@ const PORT = parseInt(process.env.PORT) || 5001;
 
 if (require.main === module) {
   initializeServer();
-  connectDB().then(() => {
+  connectDatabase().then(() => {
     server.listen(PORT, () => {
-      console.log(`🚀 Medilink API running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
-      console.log(`🏥 Health check: http://localhost:${PORT}/api/health`);
-      console.log(`📖 Swagger docs: http://localhost:${PORT}/api-docs`);
+      const env = process.env.NODE_ENV || 'development';
+      console.log(`[server] MediLink API started in ${env} mode`);
+      console.log(`[server] Local API: http://localhost:${PORT}/api`);
+      console.log(`[server] Health check: http://localhost:${PORT}/api/health`);
+      console.log(`[server] API docs: http://localhost:${PORT}/api-docs`);
     });
   });
 }
 
-module.exports = { app };
+module.exports = { app, initializeServer };

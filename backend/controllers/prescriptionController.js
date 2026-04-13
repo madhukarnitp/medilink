@@ -1,10 +1,93 @@
 const Prescription = require('../models/Prescription');
+const mongoose = require('mongoose');
 const Doctor = require('../models/Doctor');
 const Patient = require('../models/Patient');
 const Consultation = require('../models/Consultation');
 const { success, error, paginate } = require('../utils/apiResponse');
 const { sendEmail, emailTemplates } = require('../utils/email');
 const { PRESCRIPTION_STATUS, PAGINATION } = require('../utils/constants');
+const {
+  addPublicVerification,
+  isValidPrescriptionVerificationToken,
+} = require('../utils/prescriptionVerification');
+
+const getVerification = (prescription, checkedAt = new Date()) => {
+  const expiresAt = prescription.expiresAt ? new Date(prescription.expiresAt) : null;
+  const isExpired = Boolean(expiresAt && expiresAt < checkedAt);
+  const doctorVerified = prescription.createdBy?.isVerified === true;
+  const isActive = prescription.status === PRESCRIPTION_STATUS.ACTIVE && !isExpired;
+  const verified = Boolean(isActive && doctorVerified);
+
+  let reason = 'Prescription is active and issued by a verified MediLink doctor.';
+  if (prescription.status === PRESCRIPTION_STATUS.CANCELLED) {
+    reason = 'Prescription was cancelled by the issuing doctor.';
+  } else if (prescription.status === PRESCRIPTION_STATUS.EXPIRED || isExpired) {
+    reason = 'Prescription has expired.';
+  } else if (!doctorVerified) {
+    reason = 'Issuing doctor is not verified.';
+  }
+
+  return {
+    verified,
+    checkedAt: checkedAt.toISOString(),
+    reason,
+  };
+};
+
+const getUserName = (profile, fallback) =>
+  profile?.userId?.name || profile?.name || fallback;
+
+const getDoctorRegistration = (doctor) =>
+  doctor?.registrationNumber ||
+  doctor?.regNo ||
+  doctor?.licenseNumber ||
+  doctor?.medicalLicenseNumber ||
+  '';
+
+const getDoctorQualification = (doctor) =>
+  doctor?.qualification ||
+  doctor?.qualifications ||
+  doctor?.specialization ||
+  doctor?.specialty ||
+  '';
+
+const toPublicPrescriptionView = (prescriptionDoc, checkedAt = new Date()) => {
+  const prescription = addPublicVerification(prescriptionDoc);
+  const verification = getVerification(prescription, checkedAt);
+  const issuedAt = prescription.createdAt
+    ? new Date(prescription.createdAt).toISOString()
+    : null;
+  const expiresAt = prescription.expiresAt
+    ? new Date(prescription.expiresAt).toISOString()
+    : null;
+
+  return {
+    ...prescription,
+    verification,
+    view: {
+      id: prescription._id?.toString(),
+      rxId: prescription.rxId || '',
+      diagnosis: prescription.diagnosis || '',
+      status: prescription.status || PRESCRIPTION_STATUS.ACTIVE,
+      issuedAt,
+      expiresAt,
+      doctor: {
+        name: getUserName(prescription.createdBy, 'Doctor'),
+        avatar: prescription.createdBy?.userId?.avatar || '',
+        qualification: getDoctorQualification(prescription.createdBy),
+        registrationNumber: getDoctorRegistration(prescription.createdBy),
+        verified: prescription.createdBy?.isVerified === true,
+      },
+      patient: {
+        name: getUserName(prescription.createdFor, 'Patient'),
+        age: prescription.createdFor?.age || '',
+        gender: prescription.createdFor?.gender || '',
+      },
+      verificationUrl: prescription.publicVerification?.path || '',
+      verification,
+    },
+  };
+};
 
 /**
  * POST /api/prescriptions
@@ -52,7 +135,7 @@ exports.createPrescription = async (req, res, next) => {
       const tmpl = emailTemplates.prescriptionCreated(patient.userId.name, doctor.userId.name, diagnosis);
       await sendEmail({ to: patient.userId.email, ...tmpl });
     } catch (emailErr) {
-      console.warn(`Prescription email failed: ${emailErr.message}`);
+      console.warn(`[prescriptions] Prescription email delivery failed: ${emailErr.message}`);
     }
 
     const populated = await prescription.populate([
@@ -60,7 +143,7 @@ exports.createPrescription = async (req, res, next) => {
       { path: 'createdFor', populate: { path: 'userId', select: 'name email' } },
     ]);
 
-    return success(res, populated, 201);
+    return success(res, addPublicVerification(populated), 201);
   } catch (err) {
     next(err);
   }
@@ -96,33 +179,80 @@ exports.getPrescriptionById = async (req, res, next) => {
       return error(res, 'Not authorized', 403);
     }
 
-    return success(res, prescription);
+    return success(res, addPublicVerification(prescription));
   } catch (err) {
     next(err);
   }
 };
 
 /**
- * GET /api/prescriptions/verify/:id
- * Public QR verification view.
+ * GET /api/prescriptions/public/:id
+ * Public prescription detail view. No login required. Sensitive internal notes
+ * and consultation links are excluded.
+ */
+exports.getPublicPrescriptionById = async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return error(res, 'Prescription not found', 404);
+    }
+
+    const now = new Date();
+    const prescriptionDoc = await Prescription.findById(req.params.id)
+      .populate({ path: 'createdBy', populate: { path: 'userId', select: 'name avatar' } })
+      .populate({ path: 'createdFor', populate: { path: 'userId', select: 'name' } })
+      .select('-notes -consultation');
+
+    if (!prescriptionDoc) return error(res, 'Prescription not found', 404);
+
+    if (
+      prescriptionDoc.status === PRESCRIPTION_STATUS.ACTIVE &&
+      prescriptionDoc.expiresAt &&
+      prescriptionDoc.expiresAt < now
+    ) {
+      prescriptionDoc.status = PRESCRIPTION_STATUS.EXPIRED;
+      await prescriptionDoc.save();
+    }
+
+    return success(res, toPublicPrescriptionView(prescriptionDoc, now));
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /api/prescriptions/public/verify/:id?token=...
+ * Public QR verification view. No login required, but the signed token prevents
+ * prescription ID enumeration.
  */
 exports.verifyPrescription = async (req, res, next) => {
   try {
-    const prescription = await Prescription.findById(req.params.id)
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return error(res, 'Prescription not found', 404);
+    }
+
+    const now = new Date();
+    const prescriptionDoc = await Prescription.findById(req.params.id)
       .populate({ path: 'createdBy', populate: { path: 'userId', select: 'name avatar' } })
       .populate({ path: 'createdFor', populate: { path: 'userId', select: 'name' } })
-      .select('-notes')
-      .lean({ virtuals: true });
+      .select('-notes -consultation');
 
-    if (!prescription) return error(res, 'Prescription not found', 404);
+    if (!prescriptionDoc) return error(res, 'Prescription not found', 404);
 
-    return success(res, {
-      ...prescription,
-      verification: {
-        verified: true,
-        checkedAt: new Date().toISOString(),
-      },
-    });
+    const token = String(req.query.token || '').trim();
+    if (!isValidPrescriptionVerificationToken(prescriptionDoc, token)) {
+      return error(res, 'Invalid prescription verification token', 401);
+    }
+
+    if (
+      prescriptionDoc.status === PRESCRIPTION_STATUS.ACTIVE &&
+      prescriptionDoc.expiresAt &&
+      prescriptionDoc.expiresAt < now
+    ) {
+      prescriptionDoc.status = PRESCRIPTION_STATUS.EXPIRED;
+      await prescriptionDoc.save();
+    }
+
+    return success(res, toPublicPrescriptionView(prescriptionDoc, now));
   } catch (err) {
     next(err);
   }
@@ -181,7 +311,7 @@ exports.getDoctorPrescriptions = async (req, res, next) => {
       Prescription.countDocuments(filter),
     ]);
 
-    return paginate(res, prescriptions, total, page, limit);
+    return paginate(res, prescriptions.map(addPublicVerification), total, page, limit);
   } catch (err) {
     next(err);
   }

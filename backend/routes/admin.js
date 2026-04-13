@@ -9,6 +9,10 @@ const {
   deactivateUser,
   restoreUser,
   getDashboard,
+  getMedicines,
+  createMedicine,
+  updateMedicine,
+  archiveMedicine,
 } = require('../controllers/adminController');
 const {
   getOrders,
@@ -88,6 +92,39 @@ const orderStatusRules = [
   }),
 ];
 
+const medicineListRules = [
+  query('search').optional().trim().isLength({ max: 80 }).withMessage('Search cannot exceed 80 characters'),
+  query('category').optional().trim().isLength({ max: 80 }).withMessage('Category cannot exceed 80 characters'),
+  query('available').optional().isBoolean().withMessage('available must be true or false'),
+  query('stockStatus').optional().isIn(['available', 'low_stock', 'out_of_stock']).withMessage('Invalid stock status'),
+  query('includeArchived').optional().isBoolean().withMessage('includeArchived must be true or false'),
+  query('page').optional().isInt({ min: 1 }).withMessage('Page must be at least 1'),
+  query('limit').optional().isInt({ min: 1 }).withMessage('Limit must be at least 1'),
+];
+
+const medicineRules = [
+  body('name').optional().trim().notEmpty().withMessage('Medicine name is required').isLength({ max: 120 }).withMessage('Medicine name cannot exceed 120 characters'),
+  body('genericName').optional().trim().isLength({ max: 120 }).withMessage('Generic name cannot exceed 120 characters'),
+  body('brand').optional().trim().isLength({ max: 120 }).withMessage('Brand cannot exceed 120 characters'),
+  body('category').optional().trim().isLength({ max: 80 }).withMessage('Category cannot exceed 80 characters'),
+  body('dosageForm').optional().trim().isLength({ max: 60 }).withMessage('Dosage form cannot exceed 60 characters'),
+  body('strength').optional().trim().isLength({ max: 60 }).withMessage('Strength cannot exceed 60 characters'),
+  body('unitPrice').optional().isFloat({ min: 0 }).withMessage('Unit price cannot be negative'),
+  body('mrp').optional().isFloat({ min: 0 }).withMessage('MRP cannot be negative'),
+  body('stock').optional().isInt({ min: 0 }).withMessage('Stock cannot be negative'),
+  body('lowStockThreshold').optional().isInt({ min: 0 }).withMessage('Low stock threshold cannot be negative'),
+  body('available').optional().isBoolean().withMessage('available must be true or false'),
+  body('requiresPrescription').optional().isBoolean().withMessage('requiresPrescription must be true or false'),
+  body('manufacturer').optional().trim().isLength({ max: 120 }).withMessage('Manufacturer cannot exceed 120 characters'),
+  body('description').optional().trim().isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
+  body('isActive').optional().isBoolean().withMessage('isActive must be true or false'),
+];
+
+const createMedicineRules = [
+  body('name').trim().notEmpty().withMessage('Medicine name is required').isLength({ max: 120 }).withMessage('Medicine name cannot exceed 120 characters'),
+  ...medicineRules,
+];
+
 router.use(...adminOnly);
 
 router.get('/dashboard', getDashboard);
@@ -103,5 +140,10 @@ router.get('/orders', orderListRules, validate, getOrders);
 router.get('/orders/:id', idRule, validate, getOrderById);
 router.put('/orders/:id/status', orderStatusRules, validate, updateOrderStatus);
 router.put('/orders/:id/cancel', idRule, body('reason').optional().isLength({ max: 300 }), validate, cancelOrder);
+
+router.get('/medicines', medicineListRules, validate, getMedicines);
+router.post('/medicines', createMedicineRules, validate, createMedicine);
+router.put('/medicines/:id', idRule, medicineRules, validate, updateMedicine);
+router.delete('/medicines/:id', idRule, validate, archiveMedicine);
 
 module.exports = router;

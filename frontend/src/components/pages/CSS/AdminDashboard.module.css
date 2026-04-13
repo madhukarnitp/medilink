@@ -52,10 +52,135 @@
   margin: 3px 0 0;
 }
 
+.headerActions,
+.filterCluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.searchBox {
+  min-height: 48px;
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.searchBox span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.searchBox input {
+  flex: 1;
+  min-width: 120px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.viewTabs {
+  padding: 4px;
+  display: flex;
+  gap: 4px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.viewTab {
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: capitalize;
+}
+
+.viewActive {
+  background: var(--card);
+  color: var(--primary);
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.08);
+}
+
 .statsGrid {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.workspaceGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 14px;
+}
+
+.workspaceCard {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.96));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workspaceMetric {
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspaceCard h3 {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+.workspaceCard p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.workspaceCard button,
+.insightHeader button,
+.checkItem button {
+  align-self: flex-start;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  padding: 8px 11px;
+}
+
+.workspaceCard button:hover,
+.insightHeader button:hover,
+.checkItem button:hover {
+  border-color: var(--primary-border);
+  color: var(--primary);
 }
 
 .sectionCard {
@@ -63,6 +188,172 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 16px;
+}
+
+.insightGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.insightCard {
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.insightHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.insightActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.insightHeader span {
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.insightHeader h2 {
+  margin: 3px 0 0;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+.insightHeader strong {
+  color: var(--primary);
+  font-family: var(--font-display);
+  font-size: 26px;
+}
+
+.queueList,
+.checkList,
+.pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.queueItem,
+.checkItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.queueActions {
+  display: flex;
+  gap: 7px;
+}
+
+.queueActions button {
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.queueActions button:last-child {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+.emptyMini {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pipelineRow {
+  display: grid;
+  grid-template-columns: 92px 1fr 30px;
+  gap: 10px;
+  align-items: center;
+}
+
+.pipelineRow span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.pipelineTrack {
+  height: 8px;
+  overflow: hidden;
+  background: var(--card2);
+  border-radius: 999px;
+}
+
+.pipelineFill {
+  height: 100%;
+  min-width: 4px;
+  background: linear-gradient(90deg, var(--primary), var(--blue));
+  border-radius: inherit;
+}
+
+.pipelineRow strong,
+.checkItem strong {
+  color: var(--text);
+  font-weight: 900;
+}
+
+.checkItem {
+  justify-content: flex-start;
+}
+
+.checkItem p {
+  flex: 1;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.checkItem button {
+  align-self: center;
+  margin-left: auto;
+}
+
+.checkDot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.checkDot.good {
+  background: var(--primary);
+}
+
+.checkDot.warn {
+  background: #f59e0b;
+}
+
+.checkDot.danger {
+  background: var(--accent);
 }
 
 .filters {
@@ -242,26 +533,214 @@
   font-weight: 800;
 }
 
-.orderMeta {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
+.orderMetaGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 14px;
 }
 
-.orderMeta span {
+.orderMetaGrid label {
   color: var(--muted);
+  display: flex;
+  flex-direction: column;
   font-size: 12px;
   font-weight: 700;
+  gap: 6px;
 }
 
-.orderMeta select {
+.orderMetaGrid select {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text);
   padding: 8px;
   text-transform: capitalize;
+}
+
+.deliveryAddress {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 12px 0 0;
+  padding: 9px 10px;
+}
+
+.orderItems {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.orderItem {
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 9px;
+}
+
+.orderItem span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.orderItem strong {
+  border-radius: 999px;
+  font-size: 10px;
+  padding: 3px 7px;
+  text-transform: capitalize;
+}
+
+.deliveryActions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.deliveryActions button {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px;
+}
+
+.deliveryActions button:last-child {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+.deliveryActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.medicineForm {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.formGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.formGrid label,
+.switchRow label {
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  font-weight: 900;
+  gap: 6px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.formGrid input {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.switchRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.switchRow label {
+  align-items: center;
+  flex-direction: row;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.medicineGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 14px;
+}
+
+.medicineCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+
+.medicineTop {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.medicineTop h3 {
+  color: var(--text);
+  font-size: 15px;
+  margin: 0;
+}
+
+.medicineTop p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.medicineStats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.medicineStats span {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 8px;
+}
+
+.medicineStats strong {
+  color: var(--text);
+  display: block;
+  font-size: 13px;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
 }
 
 .empty {
@@ -427,6 +906,19 @@
     overflow-x: auto;
   }
 
+  .toolbar,
+  .insightGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspaceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .viewTabs {
+    overflow-x: auto;
+  }
+
   .detailsPanel {
     width: 100vw;
   }
@@ -438,5 +930,9 @@
   .verifyBox {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .checkItem {
+    flex-wrap: wrap;
   }
 }

@@ -36,7 +36,7 @@ router.get('/dashboard', protect, authorize(ROLES.PATIENT), getDashboard);
 router.get('/profile', protect, authorize(ROLES.PATIENT), getProfile);
 router.put('/profile', protect, authorize(ROLES.PATIENT), handleAvatarUpload, updateProfileRules, validate, updateProfile);
 
-// IMPORTANT: /active must be registered BEFORE /:id to avoid Express treating 'active' as an id
+// Register /active before /:id so Express does not treat "active" as an id.
 router.get('/prescriptions/active', protect, authorize(ROLES.PATIENT), getActivePrescriptions);
 router.get('/prescriptions/:id', protect, authorize(ROLES.PATIENT), prescriptionIdRules, validate, getPrescriptionById);
 router.get('/prescriptions', protect, authorize(ROLES.PATIENT), getPrescriptions);

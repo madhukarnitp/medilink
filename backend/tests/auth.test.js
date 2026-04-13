@@ -36,7 +36,8 @@ describe('POST /api/auth/register', () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.token).toBeDefined();
+    expect(res.body.data.token).toBeUndefined();
+    expect(res.body.data.requiresVerification).toBe(true);
     expect(res.body.data.user.role).toBe('patient');
     expect(res.body.data.user.password).toBeUndefined();
   });
@@ -102,16 +103,18 @@ describe('POST /api/auth/register', () => {
 });
 
 describe('POST /api/auth/login', () => {
-  beforeEach(async () => {
+  it('logs in with valid credentials', async () => {
     await request(app).post('/api/auth/register').send({
       name: 'Login User',
       email: 'loginuser@test.com',
       password: 'password123',
       role: 'patient',
     });
-  });
+    await User.updateOne(
+      { email: 'loginuser@test.com' },
+      { $set: { isEmailVerified: true } }
+    );
 
-  it('logs in with valid credentials', async () => {
     const res = await request(app).post('/api/auth/login').send({
       email: 'loginuser@test.com',
       password: 'password123',
@@ -122,6 +125,13 @@ describe('POST /api/auth/login', () => {
   });
 
   it('rejects wrong password', async () => {
+    await request(app).post('/api/auth/register').send({
+      name: 'Login User',
+      email: 'loginuser@test.com',
+      password: 'password123',
+      role: 'patient',
+    });
+
     const res = await request(app).post('/api/auth/login').send({
       email: 'loginuser@test.com',
       password: 'wrongpassword',
@@ -136,19 +146,63 @@ describe('POST /api/auth/login', () => {
     });
     expect(res.statusCode).toBe(401);
   });
+
+  it('rejects login when email is not verified', async () => {
+    await request(app).post('/api/auth/register').send({
+      name: 'Unverified User',
+      email: 'unverified@test.com',
+      password: 'password123',
+      role: 'patient',
+    });
+
+    const res = await request(app).post('/api/auth/login').send({
+      email: 'unverified@test.com',
+      password: 'password123',
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body.message).toMatch(/verify your email/i);
+  });
+
+  it('rejects doctor login when account approval is pending', async () => {
+    await request(app).post('/api/auth/register').send({
+      name: 'Pending Doctor',
+      email: 'pendingdoctor@test.com',
+      password: 'password123',
+      role: 'doctor',
+      specialization: 'Cardiologist',
+      qualification: 'MBBS, MD',
+      regNo: 'PENDING-001',
+      price: 700,
+    });
+    await User.updateOne(
+      { email: 'pendingdoctor@test.com' },
+      { $set: { isEmailVerified: true } }
+    );
+
+    const res = await request(app).post('/api/auth/login').send({
+      email: 'pendingdoctor@test.com',
+      password: 'password123',
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body.message).toMatch(/pending admin verification/i);
+  });
 });
 
 describe('GET /api/auth/me', () => {
   let token;
 
   beforeEach(async () => {
-    const res = await request(app).post('/api/auth/register').send({
+    const user = await User.create({
       name: 'Me User',
       email: 'meuser@test.com',
       password: 'password123',
       role: 'patient',
+      isEmailVerified: true,
     });
-    token = res.body.data.token;
+    await Patient.create({ userId: user._id });
+    token = user.getSignedToken();
   });
 
   it('returns current user with valid token', async () => {

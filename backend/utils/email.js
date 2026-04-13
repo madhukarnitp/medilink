@@ -17,6 +17,10 @@ const createTransporter = () => {
  * @param {Object} options - { to, subject, html, text }
  */
 const sendEmail = async (options) => {
+  if (process.env.NODE_ENV === 'test' || process.env.DISABLE_EMAIL === 'true') {
+    return { messageId: `email-disabled-${Date.now()}`, accepted: [options.to] };
+  }
+
   const transporter = createTransporter();
   const mailOptions = {
     from: process.env.EMAIL_FROM || `"Medilink" <${process.env.EMAIL_USER}>`,
@@ -28,10 +32,10 @@ const sendEmail = async (options) => {
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log(`Email sent to ${options.to} — MessageId: ${info.messageId}`);
+    console.log(`[email] Message delivered to ${options.to}; id=${info.messageId}`);
     return info;
   } catch (err) {
-    console.error(`Email failed to ${options.to}: ${err.message}`);
+    console.error(`[email] Message delivery failed for ${options.to}: ${err.message}`);
     throw err;
   }
 };

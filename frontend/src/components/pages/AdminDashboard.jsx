@@ -1,30 +1,15 @@
 import { useEffect, useState } from "react";
+import { useApp, PAGES } from "../../context/AppContext";
 import { admin as adminApi } from "../../services/api";
 import { Button, ErrorMsg, Spinner, StatCard } from "../ui/UI";
 import styles from "./CSS/AdminDashboard.module.css";
 
-const USER_FILTERS = ["all", "patient", "doctor", "admin"];
-const ORDER_STATUSES = [
-  "pending",
-  "confirmed",
-  "processing",
-  "shipped",
-  "delivered",
-  "cancelled",
-];
-const ORDER_STATUS_ALIASES = {
-  placed: "pending",
-  packed: "processing",
-  out_for_delivery: "shipped",
-};
-
 export default function AdminDashboard() {
+  const { navigate, showToast } = useApp();
   const [dashboard, setDashboard] = useState(null);
   const [users, setUsers] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [roleFilter, setRoleFilter] = useState("all");
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [medicines, setMedicines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
   const [error, setError] = useState("");
@@ -33,15 +18,16 @@ export default function AdminDashboard() {
     setLoading(true);
     setError("");
     try {
-      const params = roleFilter === "all" ? {} : { role: roleFilter };
-      const [dashboardRes, usersRes, ordersRes] = await Promise.all([
+      const [dashboardRes, usersRes, ordersRes, medicinesRes] = await Promise.all([
         adminApi.getDashboard().catch(() => ({ data: null })),
-        adminApi.getUsers(params),
-        adminApi.getOrders({ limit: 20 }),
+        adminApi.getUsers({ limit: 50 }),
+        adminApi.getOrders({ limit: 50 }),
+        adminApi.getMedicines({ limit: 50 }),
       ]);
       setDashboard(dashboardRes.data);
       setUsers(usersRes.data?.users || usersRes.data || []);
       setOrders(ordersRes.data?.orders || ordersRes.data || []);
+      setMedicines(medicinesRes.data?.medicines || medicinesRes.data || []);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -51,67 +37,18 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     load();
-  }, [roleFilter]);
-
-  const verifyUser = async (userId) => {
-    setSavingId(userId);
-    try {
-      await adminApi.verifyUser(userId, true);
-      await load();
-    } catch (e) {
-      setError(e.message || "Could not verify user");
-    } finally {
-      setSavingId("");
-    }
-  };
+  }, []);
 
   const verifyDoctor = async (userId, verified) => {
     setSavingId(userId);
     try {
       await adminApi.verifyDoctor(userId, verified);
+      showToast(
+        verified ? "Doctor approved successfully." : "Doctor verification removed.",
+      );
       await load();
-      if (selectedUser?.user?._id === userId || selectedUser?._id === userId) {
-        await viewUser(userId);
-      }
     } catch (e) {
       setError(e.message || "Could not update doctor verification");
-    } finally {
-      setSavingId("");
-    }
-  };
-
-  const viewUser = async (userId) => {
-    setDetailsLoading(true);
-    setError("");
-    try {
-      const response = await adminApi.getUserById(userId);
-      setSelectedUser(response.data);
-    } catch (e) {
-      setError(e.message || "Could not load user details");
-    } finally {
-      setDetailsLoading(false);
-    }
-  };
-
-  const updateUserStatus = async (userId, status) => {
-    setSavingId(userId);
-    try {
-      await adminApi.updateUserStatus(userId, status);
-      await load();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setSavingId("");
-    }
-  };
-
-  const updateOrderStatus = async (orderId, status) => {
-    setSavingId(orderId);
-    try {
-      await adminApi.updateOrderStatus(orderId, status);
-      await load();
-    } catch (e) {
-      setError(e.message);
     } finally {
       setSavingId("");
     }
@@ -127,19 +64,62 @@ export default function AdminDashboard() {
     );
   }
 
-  const stats = buildStats(dashboard, users, orders);
+  const stats = buildStats(dashboard, users, orders, medicines);
+  const doctorQueue = users.filter(
+    (item) => item.role === "doctor" && !item.profile?.isVerified,
+  );
+  const blockedUsers = users.filter((user) => user.isActive === false).length;
+  const orderPipeline = getOrderPipeline(orders);
+  const workspaceCards = [
+    {
+      title: "User administration",
+      description: "Review signups, approve email verification, and manage account access.",
+      metric: `${users.length} total accounts`,
+      action: "Open users",
+      page: PAGES.ADMIN_USERS,
+    },
+    {
+      title: "Doctor approvals",
+      description: "Work through professional credentials and keep verified doctors accurate.",
+      metric: `${doctorQueue.length} pending reviews`,
+      action: "Open doctors",
+      page: PAGES.ADMIN_DOCTORS,
+    },
+    {
+      title: "Order operations",
+      description: "Track pending fulfilment and keep pharmacy delivery statuses current.",
+      metric: `${orderPipeline.pending} pending orders`,
+      action: "Open orders",
+      page: PAGES.ADMIN_ORDERS,
+    },
+    {
+      title: "Inventory control",
+      description: "Manage low stock, medicine availability, and pricing updates.",
+      metric: `${medicines.length} medicine records`,
+      action: "Open medicines",
+      page: PAGES.ADMIN_MEDICINES,
+    },
+  ];
 
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <span className={styles.eyebrow}>Admin Control Center</span>
-          <h1>Platform Management</h1>
-          <p>Verify users, manage accounts, and monitor medicine orders.</p>
+          <span className={styles.eyebrow}>Admin Workspace</span>
+          <h1>Operations Overview</h1>
+          <p>
+            Keep the platform healthy, clear verification queues, and move into
+            each admin area from a single focused landing page.
+          </p>
         </div>
-        <Button variant="outline" onClick={load}>
-          Refresh
-        </Button>
+        <div className={styles.headerActions}>
+          <Button variant="outline" onClick={() => navigate(PAGES.PROFILE)}>
+            Profile
+          </Button>
+          <Button variant="outline" onClick={load}>
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {error && <ErrorMsg message={error} onRetry={load} />}
@@ -153,281 +133,133 @@ export default function AdminDashboard() {
       <section className={styles.sectionCard}>
         <div className={styles.sectionHeader}>
           <div>
-            <h2>Users</h2>
-            <p>Approve verified accounts and control active access.</p>
+            <span className={styles.eyebrow}>Workspace</span>
+            <h2>Administrative Areas</h2>
+            <p>Use the sidebar or jump directly into the work that needs attention.</p>
           </div>
-          <div className={styles.filters}>
-            {USER_FILTERS.map((filter) => (
-              <button
-                className={`${styles.filterBtn} ${roleFilter === filter ? styles.filterActive : ""}`}
-                key={filter}
-                onClick={() => setRoleFilter(filter)}
-                type="button"
-              >
-                {filter}
+        </div>
+        <div className={styles.workspaceGrid}>
+          {workspaceCards.map((card) => (
+            <article className={styles.workspaceCard} key={card.title}>
+              <span className={styles.workspaceMetric}>{card.metric}</span>
+              <h3>{card.title}</h3>
+              <p>{card.description}</p>
+              <button onClick={() => navigate(card.page)} type="button">
+                {card.action}
               </button>
-            ))}
-          </div>
-        </div>
-
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Role</th>
-                <th>Verification</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className={styles.empty}>
-                    No users found
-                  </td>
-                </tr>
-              ) : (
-                users.map((item) => (
-                  <UserRow
-                    item={item}
-                    key={item._id || item.id || item.email}
-                    onStatus={updateUserStatus}
-                    onView={viewUser}
-                    onVerifyDoctor={verifyDoctor}
-                    onVerify={verifyUser}
-                    saving={savingId === (item._id || item.id)}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
+            </article>
+          ))}
         </div>
       </section>
 
-      <section className={styles.sectionCard}>
-        <div className={styles.sectionHeader}>
-          <div>
-            <h2>Orders</h2>
-            <p>Track pharmacy fulfilment and update delivery workflow.</p>
-          </div>
-        </div>
-
-        <div className={styles.orderGrid}>
-          {orders.length === 0 ? (
-            <div className={styles.empty}>No orders found</div>
-          ) : (
-            orders.map((order) => (
-              <OrderCard
-                key={order._id || order.id}
-                order={order}
-                onStatus={updateOrderStatus}
-                saving={savingId === (order._id || order.id)}
-              />
-            ))
-          )}
-        </div>
-      </section>
-
-      {(selectedUser || detailsLoading) && (
-        <UserDetailsPanel
-          data={selectedUser}
-          loading={detailsLoading}
-          onClose={() => setSelectedUser(null)}
+      <section className={styles.insightGrid}>
+        <DoctorQueue
+          doctors={doctorQueue}
+          onOpenDoctors={() => navigate(PAGES.ADMIN_DOCTORS)}
           onVerifyDoctor={verifyDoctor}
           savingId={savingId}
         />
-      )}
+        <OrderPipeline
+          onOpenOrders={() => navigate(PAGES.ADMIN_ORDERS)}
+          pipeline={orderPipeline}
+        />
+        <InventorySnapshot
+          medicines={medicines}
+          onOpenMedicines={() => navigate(PAGES.ADMIN_MEDICINES)}
+        />
+        <AdminChecklist
+          blockedUsers={blockedUsers}
+          onOpenDoctors={() => navigate(PAGES.ADMIN_DOCTORS)}
+          onOpenOrders={() => navigate(PAGES.ADMIN_ORDERS)}
+          onOpenUsers={() => navigate(PAGES.ADMIN_USERS)}
+          pendingDoctors={doctorQueue.length}
+          pendingOrders={orderPipeline.pending}
+        />
+      </section>
     </div>
   );
 }
 
-function UserRow({
-  item,
-  onStatus,
-  onVerify,
-  onVerifyDoctor,
-  onView,
-  saving,
-}) {
-  const id = item._id || item.id;
-  const emailVerified =
-    item.isEmailVerified ??
-    item.isVerified ??
-    item.emailVerified ??
-    item.verified;
-  const doctorVerified = item.profile?.isVerified;
-  const status =
-    item.status || (item.isActive === false ? "blocked" : "active");
-
+function DoctorQueue({ doctors, onOpenDoctors, onVerifyDoctor, savingId }) {
   return (
-    <tr>
-      <td>
-        <div className={styles.userCell}>
-          <div className={styles.avatar}>{getInitials(item.name)}</div>
-          <div>
-            <div className={styles.name}>{item.name || "Unnamed user"}</div>
-            <div className={styles.meta}>{item.email}</div>
-          </div>
+    <section className={styles.insightCard}>
+      <div className={styles.insightHeader}>
+        <div>
+          <span>Credential queue</span>
+          <h2>Doctor Verification</h2>
         </div>
-      </td>
-      <td>
-        <span className={styles.rolePill}>{item.role || "patient"}</span>
-      </td>
-      <td>
-        <span
-          className={`${styles.statusPill} ${emailVerified ? styles.good : styles.warn}`}
-        >
-          {emailVerified ? "Email verified" : "Email pending"}
-        </span>
-        {item.role === "doctor" && (
-          <span
-            className={`${styles.statusPill} ${doctorVerified ? styles.good : styles.warn} ${styles.inlinePill}`}
-          >
-            {doctorVerified ? "Doctor verified" : "Doctor pending"}
-          </span>
-        )}
-      </td>
-      <td>
-        <span
-          className={`${styles.statusPill} ${status === "active" ? styles.good : styles.danger}`}
-        >
-          {status}
-        </span>
-      </td>
-      <td>
-        <div className={styles.rowActions}>
-          <button disabled={saving} onClick={() => onView(id)} type="button">
-            Details
-          </button>
-          {!emailVerified && (
-            <button
-              disabled={saving}
-              onClick={() => onVerify(id)}
-              type="button"
-            >
-              Verify
-            </button>
-          )}
-          {item.role === "doctor" && (
-            <button
-              disabled={saving}
-              onClick={() => onVerifyDoctor(id, !doctorVerified)}
-              type="button"
-            >
-              {doctorVerified ? "Unverify Doctor" : "Verify Doctor"}
-            </button>
-          )}
-          <button
-            disabled={saving}
-            onClick={() =>
-              onStatus(id, status === "active" ? "blocked" : "active")
-            }
-            type="button"
-          >
-            {status === "active" ? "Block" : "Activate"}
+        <div className={styles.insightActions}>
+          <strong>{doctors.length}</strong>
+          <button onClick={onOpenDoctors} type="button">
+            View all
           </button>
         </div>
-      </td>
-    </tr>
-  );
-}
-
-function UserDetailsPanel({
-  data,
-  loading,
-  onClose,
-  onVerifyDoctor,
-  savingId,
-}) {
-  const user = data?.user || data;
-  const profile = data?.profile || null;
-  const userId = user?._id || user?.id;
-  const isDoctor = user?.role === "doctor";
-  const doctorVerified = Boolean(profile?.isVerified);
-
-  return (
-    <div className={styles.modalBackdrop} role="presentation">
-      <aside className={styles.detailsPanel} role="dialog" aria-modal="true">
-        <div className={styles.detailsHeader}>
-          <div>
-            <h2>User Details</h2>
-            <p>Complete account and profile information.</p>
-          </div>
-          <button className={styles.closeBtn} onClick={onClose} type="button">
-            Close
-          </button>
-        </div>
-
-        {loading ? (
-          <div className={styles.loadingWrap}>
-            <Spinner size={28} />
-          </div>
+      </div>
+      <div className={styles.queueList}>
+        {doctors.length === 0 ? (
+          <p className={styles.emptyMini}>No doctors waiting for review.</p>
         ) : (
-          <>
-            <div className={styles.detailsHero}>
-              <div className={styles.avatar}>{getInitials(user?.name)}</div>
-              <div>
-                <h3>{user?.name || "Unnamed user"}</h3>
-                <p>{user?.email || "No email"}</p>
-              </div>
-            </div>
-
-            <DetailGrid
-              title="Account"
-              items={[
-                ["Role", user?.role],
-                ["Phone", user?.phone],
-                ["Email verified", yesNo(user?.isEmailVerified)],
-                ["Status", user?.isActive === false ? "Blocked" : "Active"],
-                ["Joined", formatDateTime(user?.createdAt)],
-                ["Last seen", formatDateTime(user?.lastSeen)],
-              ]}
-            />
-
-            {profile && (
-              <DetailGrid
-                title={isDoctor ? "Doctor Profile" : "Patient Profile"}
-                items={profileDetailItems(profile, isDoctor)}
-              />
-            )}
-
-            {isDoctor && (
-              <div className={styles.verifyBox}>
-                <div>
-                  <strong>Doctor verification</strong>
-                  <span>
-                    {doctorVerified
-                      ? "This doctor is approved to appear as verified."
-                      : "Review registration details before approving."}
-                  </span>
+          doctors.slice(0, 5).map((doctor) => {
+            const id = doctor._id || doctor.id;
+            return (
+              <div className={styles.queueItem} key={id}>
+                <div className={styles.userCell}>
+                  <div className={styles.avatar}>{getInitials(doctor.name)}</div>
+                  <div>
+                    <div className={styles.name}>{doctor.name}</div>
+                    <div className={styles.meta}>
+                      {doctor.profile?.specialization || "Doctor"} ·{" "}
+                      {doctor.profile?.regNo || "No reg. no."}
+                    </div>
+                  </div>
                 </div>
-                <Button
-                  variant={doctorVerified ? "outline" : "primary"}
-                  disabled={savingId === userId}
-                  onClick={() => onVerifyDoctor(userId, !doctorVerified)}
-                >
-                  {doctorVerified ? "Unverify Doctor" : "Verify Doctor"}
-                </Button>
+                <div className={styles.queueActions}>
+                  <button onClick={onOpenDoctors} type="button">
+                    Review
+                  </button>
+                  <button
+                    disabled={savingId === id}
+                    onClick={() => onVerifyDoctor(id, true)}
+                    type="button"
+                  >
+                    Approve
+                  </button>
+                </div>
               </div>
-            )}
-          </>
+            );
+          })
         )}
-      </aside>
-    </div>
+      </div>
+    </section>
   );
 }
 
-function DetailGrid({ title, items }) {
+function OrderPipeline({ onOpenOrders, pipeline }) {
+  const steps = ["pending", "confirmed", "processing", "shipped", "delivered"];
+  const max = Math.max(...steps.map((step) => pipeline[step] || 0), 1);
+
   return (
-    <section className={styles.detailSection}>
-      <h3>{title}</h3>
-      <div className={styles.detailGrid}>
-        {items.map(([label, value]) => (
-          <div className={styles.detailItem} key={label}>
-            <span>{label}</span>
-            <strong>{formatValue(value)}</strong>
+    <section className={styles.insightCard}>
+      <div className={styles.insightHeader}>
+        <div>
+          <span>Pharmacy ops</span>
+          <h2>Order Pipeline</h2>
+        </div>
+        <button onClick={onOpenOrders} type="button">
+          Open orders
+        </button>
+      </div>
+      <div className={styles.pipeline}>
+        {steps.map((step) => (
+          <div className={styles.pipelineRow} key={step}>
+            <span>{formatStatus(step)}</span>
+            <div className={styles.pipelineTrack}>
+              <div
+                className={styles.pipelineFill}
+                style={{ width: `${((pipeline[step] || 0) / max) * 100}%` }}
+              />
+            </div>
+            <strong>{pipeline[step] || 0}</strong>
           </div>
         ))}
       </div>
@@ -435,52 +267,112 @@ function DetailGrid({ title, items }) {
   );
 }
 
-function OrderCard({ order, onStatus, saving }) {
-  const id = order._id || order.id;
-  const status = normalizeOrderStatus(order.status);
-  const patientName =
-    order.patient?.userId?.name ||
-    order.patient?.name ||
-    order.user?.name ||
-    "Patient";
-  const total = order.total || order.totalAmount || order.amount || 0;
+function AdminChecklist({
+  pendingDoctors,
+  pendingOrders,
+  blockedUsers,
+  onOpenDoctors,
+  onOpenOrders,
+  onOpenUsers,
+}) {
+  const checks = [
+    {
+      label: "Review doctor registrations",
+      value: pendingDoctors,
+      tone: pendingDoctors > 0 ? "warn" : "good",
+      action: onOpenDoctors,
+      actionLabel: "Doctors",
+    },
+    {
+      label: "Watch pending medicine orders",
+      value: pendingOrders,
+      tone: pendingOrders > 0 ? "warn" : "good",
+      action: onOpenOrders,
+      actionLabel: "Orders",
+    },
+    {
+      label: "Resolve blocked or inactive accounts",
+      value: blockedUsers,
+      tone: blockedUsers > 0 ? "danger" : "good",
+      action: onOpenUsers,
+      actionLabel: "Users",
+    },
+  ];
 
   return (
-    <article className={styles.orderCard}>
-      <div className={styles.orderTop}>
+    <section className={styles.insightCard}>
+      <div className={styles.insightHeader}>
         <div>
-          <h3>
-            {order.orderNumber ||
-              order.orderId ||
-              order.rxId ||
-              `Order ${String(id || "").slice(-6)}`}
-          </h3>
-          <p>
-            {patientName} ·{" "}
-            {order.items?.length || order.medicines?.length || 0} items
-          </p>
+          <span>Daily control</span>
+          <h2>Admin Checklist</h2>
         </div>
-        <span className={styles.price}>₹{total}</span>
       </div>
-      <div className={styles.orderMeta}>
-        <span>Status</span>
-        <select
-          value={status}
-          onChange={(event) => onStatus(id, event.target.value)}
-          disabled={saving}
-        >
-          {ORDER_STATUSES.map((option) => (
-            <option key={option} value={option}>
-              {formatStatus(option)}
-            </option>
-          ))}
-        </select>
+      <div className={styles.checkList}>
+        {checks.map((item) => (
+          <div className={styles.checkItem} key={item.label}>
+            <span className={`${styles.checkDot} ${styles[item.tone]}`} />
+            <p>{item.label}</p>
+            <strong>{item.value}</strong>
+            <button onClick={item.action} type="button">
+              {item.actionLabel}
+            </button>
+          </div>
+        ))}
       </div>
-    </article>
+    </section>
   );
 }
 
-function buildStats(dashboard, users, orders) {
+function InventorySnapshot({ medicines, onOpenMedicines }) {
+  const available = medicines.filter(
+    (medicine) => medicine.available !== false && Number(medicine.stock || 0) > 0,
+  ).length;
+  const lowStock = medicines.filter(
+    (medicine) =>
+      medicine.available !== false &&
+      Number(medicine.stock || 0) > 0 &&
+      Number(medicine.stock || 0) <= Number(medicine.lowStockThreshold || 0),
+  ).length;
+  const outOfStock = medicines.filter(
+    (medicine) => medicine.available === false || Number(medicine.stock || 0) <= 0,
+  ).length;
+
+  return (
+    <section className={styles.insightCard}>
+      <div className={styles.insightHeader}>
+        <div>
+          <span>Medicine delivery</span>
+          <h2>Inventory Health</h2>
+        </div>
+        <div className={styles.insightActions}>
+          <strong>{medicines.length}</strong>
+          <button onClick={onOpenMedicines} type="button">
+            Open stock
+          </button>
+        </div>
+      </div>
+      <div className={styles.checkList}>
+        <div className={styles.checkItem}>
+          <span className={`${styles.checkDot} ${styles.good}`} />
+          <p>Available for delivery</p>
+          <strong>{available}</strong>
+        </div>
+        <div className={styles.checkItem}>
+          <span className={`${styles.checkDot} ${styles.warn}`} />
+          <p>Low stock</p>
+          <strong>{lowStock}</strong>
+        </div>
+        <div className={styles.checkItem}>
+          <span className={`${styles.checkDot} ${styles.danger}`} />
+          <p>Out of stock or disabled</p>
+          <strong>{outOfStock}</strong>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function buildStats(dashboard, users, orders, medicines) {
   const totalUsers =
     dashboard?.stats?.users ??
     dashboard?.totalUsers ??
@@ -511,6 +403,12 @@ function buildStats(dashboard, users, orders) {
           normalizeOrderStatus(order.status),
         ),
     ).length;
+  const availableMedicines =
+    dashboard?.availableMedicines ??
+    medicines.filter(
+      (medicine) =>
+        medicine.available !== false && Number(medicine.stock || 0) > 0,
+    ).length;
 
   return [
     {
@@ -523,7 +421,7 @@ function buildStats(dashboard, users, orders) {
     {
       label: "Pending Verification",
       value: String(pendingUsers),
-      sub: "Need admin/email approval",
+      sub: "Need admin approval",
       color: "#F59E0B",
       positive: pendingUsers === 0,
     },
@@ -541,85 +439,40 @@ function buildStats(dashboard, users, orders) {
       color: "#8B5CF6",
       positive: null,
     },
+    {
+      label: "Available Medicines",
+      value: String(availableMedicines),
+      sub: "Ready for ordering",
+      color: "#06B6D4",
+      positive: null,
+    },
   ];
 }
 
+function getOrderPipeline(orders) {
+  return orders.reduce(
+    (acc, order) => {
+      const status = normalizeOrderStatus(order.status);
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    },
+    {
+      pending: 0,
+      confirmed: 0,
+      processing: 0,
+      shipped: 0,
+      delivered: 0,
+      cancelled: 0,
+    },
+  );
+}
+
 function normalizeOrderStatus(status) {
-  return ORDER_STATUS_ALIASES[status] || status || "pending";
+  return status || "pending";
 }
 
 function formatStatus(status) {
   return status.replaceAll("_", " ");
-}
-
-function profileDetailItems(profile, isDoctor) {
-  if (isDoctor) {
-    return [
-      ["Specialization", profile.specialization],
-      ["Qualification", profile.qualification],
-      ["Registration No.", profile.regNo],
-      ["Experience", profile.experience ? `${profile.experience} years` : "0 years"],
-      ["Consultation fee", profile.price ? `₹${profile.price}` : "₹0"],
-      ["Doctor verified", yesNo(profile.isVerified)],
-      ["Online", yesNo(profile.online)],
-      ["Rating", profile.rating ? `${profile.rating} (${profile.ratingCount || 0} reviews)` : "No ratings"],
-      ["Consultations", profile.consultationCount],
-      ["Hospital", formatHospital(profile.hospital)],
-      ["Languages", profile.languages?.join(", ")],
-      ["Bio", profile.bio],
-    ];
-  }
-
-  return [
-    ["Age", profile.age],
-    ["Gender", profile.gender],
-    ["Blood group", profile.bloodGroup],
-    ["Weight", profile.weight ? `${profile.weight} kg` : ""],
-    ["Height", profile.height ? `${profile.height} cm` : ""],
-    ["Allergies", arrayOrText(profile.allergies)],
-    ["Chronic conditions", arrayOrText(profile.chronicConditions)],
-    ["Emergency contact", profile.emergencyContact?.phone || profile.emergencyContact],
-    ["Address", formatAddress(profile.address)],
-  ];
-}
-
-function formatValue(value) {
-  if (value === undefined || value === null || value === "") return "Not provided";
-  if (typeof value === "boolean") return yesNo(value);
-  return String(value);
-}
-
-function yesNo(value) {
-  return value ? "Yes" : "No";
-}
-
-function arrayOrText(value) {
-  if (Array.isArray(value)) return value.join(", ");
-  return value;
-}
-
-function formatHospital(hospital) {
-  if (!hospital) return "";
-  return [hospital.name, hospital.city, hospital.state].filter(Boolean).join(", ");
-}
-
-function formatAddress(address) {
-  if (!address) return "";
-  if (typeof address === "string") return address;
-  return [address.line1, address.city, address.state, address.pincode]
-    .filter(Boolean)
-    .join(", ");
-}
-
-function formatDateTime(value) {
-  if (!value) return "";
-  return new Date(value).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 function getInitials(name = "U") {

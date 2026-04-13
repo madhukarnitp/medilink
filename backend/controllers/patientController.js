@@ -4,6 +4,7 @@ const Prescription = require('../models/Prescription');
 const Consultation = require('../models/Consultation');
 const { success, error, paginate } = require('../utils/apiResponse');
 const { PRESCRIPTION_STATUS, CONSULTATION_STATUS, PAGINATION } = require('../utils/constants');
+const { addPublicVerification } = require('../utils/prescriptionVerification');
 
 /**
  * GET /api/patients/profile
@@ -62,6 +63,7 @@ exports.getPrescriptions = async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     const patient = await Patient.findOne({ userId: req.user._id }).select('_id').lean();
+    console.log(`[patient] getPrescriptions: userId=${req.user._id}, patient=${patient ? patient._id : 'not found'}`);
     if (!patient) return error(res, 'Patient profile not found', 404);
 
     const filter = { createdFor: patient._id };
@@ -77,7 +79,8 @@ exports.getPrescriptions = async (req, res, next) => {
       Prescription.countDocuments(filter),
     ]);
 
-    return paginate(res, prescriptions, total, page, limit);
+    console.log(`[patient] getPrescriptions: found ${prescriptions.length} prescriptions`);
+    return paginate(res, prescriptions.map(addPublicVerification), total, page, limit);
   } catch (err) {
     next(err);
   }
@@ -105,7 +108,7 @@ exports.getActivePrescriptions = async (req, res, next) => {
       .sort({ createdAt: -1 })
       .lean({ virtuals: true });
 
-    return success(res, prescriptions);
+    return success(res, prescriptions.map(addPublicVerification));
   } catch (err) {
     next(err);
   }
@@ -122,10 +125,12 @@ exports.getPrescriptionById = async (req, res, next) => {
 
     const prescription = await Prescription.findOne({ _id: req.params.id, createdFor: patient._id })
       .populate({ path: 'createdBy', populate: { path: 'userId', select: 'name avatar' } })
+      .populate({ path: 'createdFor', populate: { path: 'userId', select: 'name email avatar' } })
+      .populate('consultation')
       .lean({ virtuals: true });
 
     if (!prescription) return error(res, 'Prescription not found', 404);
-    return success(res, prescription);
+    return success(res, addPublicVerification(prescription));
   } catch (err) {
     next(err);
   }

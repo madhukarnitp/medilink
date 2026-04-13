@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Patient = require('../models/Patient');
 const Doctor = require('../models/Doctor');
 const Order = require('../models/Order');
+const Medicine = require('../models/Medicine');
 const { success, error, paginate } = require('../utils/apiResponse');
 const { ROLES, PAGINATION } = require('../utils/constants');
 
@@ -155,7 +156,19 @@ exports.restoreUser = async (req, res, next) => {
 
 exports.getDashboard = async (req, res, next) => {
   try {
-    const [users, activeUsers, doctors, verifiedDoctors, patients, orders, pendingOrders] = await Promise.all([
+    const [
+      users,
+      activeUsers,
+      doctors,
+      verifiedDoctors,
+      patients,
+      orders,
+      pendingOrders,
+      medicines,
+      availableMedicines,
+      lowStockMedicines,
+      outOfStockMedicines,
+    ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ isActive: true }),
       User.countDocuments({ role: ROLES.DOCTOR }),
@@ -163,6 +176,18 @@ exports.getDashboard = async (req, res, next) => {
       User.countDocuments({ role: ROLES.PATIENT }),
       Order.countDocuments(),
       Order.countDocuments({ status: 'pending' }),
+      Medicine.countDocuments({ isActive: true }),
+      Medicine.countDocuments({ isActive: true, available: true, stock: { $gt: 0 } }),
+      Medicine.countDocuments({
+        isActive: true,
+        available: true,
+        $expr: { $lte: ['$stock', '$lowStockThreshold'] },
+        stock: { $gt: 0 },
+      }),
+      Medicine.countDocuments({
+        isActive: true,
+        $or: [{ available: false }, { stock: { $lte: 0 } }],
+      }),
     ]);
 
     return success(res, {
@@ -174,7 +199,106 @@ exports.getDashboard = async (req, res, next) => {
       patients,
       orders,
       pendingOrders,
+      medicines,
+      availableMedicines,
+      lowStockMedicines,
+      outOfStockMedicines,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getMedicines = async (req, res, next) => {
+  try {
+    const { page, limit, skip } = getPagination(req.query);
+    const filter = { isActive: req.query.includeArchived === 'true' ? { $in: [true, false] } : true };
+    const andConditions = [];
+
+    if (req.query.available !== undefined) filter.available = req.query.available === 'true';
+    if (req.query.category) filter.category = req.query.category;
+    if (req.query.stockStatus === 'out_of_stock') {
+      andConditions.push({ $or: [{ available: false }, { stock: { $lte: 0 } }] });
+    } else if (req.query.stockStatus === 'low_stock') {
+      filter.available = true;
+      filter.stock = { $gt: 0 };
+      filter.$expr = { $lte: ['$stock', '$lowStockThreshold'] };
+    } else if (req.query.stockStatus === 'available') {
+      filter.available = true;
+      filter.$expr = { $gt: ['$stock', '$lowStockThreshold'] };
+    }
+
+    if (req.query.search) {
+      const regex = new RegExp(escapeRegex(req.query.search.trim()), 'i');
+      andConditions.push({
+        $or: [
+          { name: regex },
+          { genericName: regex },
+          { brand: regex },
+          { category: regex },
+        ],
+      });
+    }
+
+    if (andConditions.length) filter.$and = andConditions;
+
+    const [medicines, total] = await Promise.all([
+      Medicine.find(filter)
+        .populate('updatedBy', 'name role')
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean({ virtuals: true }),
+      Medicine.countDocuments(filter),
+    ]);
+
+    return paginate(res, medicines, total, page, limit);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.createMedicine = async (req, res, next) => {
+  try {
+    const medicine = await Medicine.create({
+      ...sanitizeMedicinePayload(req.body),
+      updatedBy: req.user._id,
+    });
+    return success(res, medicine, 201);
+  } catch (err) {
+    if (err.code === 11000) return error(res, 'Medicine already exists', 409);
+    next(err);
+  }
+};
+
+exports.updateMedicine = async (req, res, next) => {
+  try {
+    const medicine = await Medicine.findByIdAndUpdate(
+      req.params.id,
+      {
+        ...sanitizeMedicinePayload(req.body),
+        updatedBy: req.user._id,
+      },
+      { new: true, runValidators: true }
+    ).populate('updatedBy', 'name role');
+
+    if (!medicine) return error(res, 'Medicine not found', 404);
+    return success(res, medicine);
+  } catch (err) {
+    if (err.code === 11000) return error(res, 'Medicine already exists', 409);
+    next(err);
+  }
+};
+
+exports.archiveMedicine = async (req, res, next) => {
+  try {
+    const medicine = await Medicine.findByIdAndUpdate(
+      req.params.id,
+      { isActive: false, available: false, updatedBy: req.user._id },
+      { new: true, runValidators: true }
+    );
+    if (!medicine) return error(res, 'Medicine not found', 404);
+    return success(res, medicine);
   } catch (err) {
     next(err);
   }
@@ -225,6 +349,30 @@ function getMissingDoctorFields(profile = {}) {
   return ['specialization', 'qualification', 'regNo', 'price'].filter((field) => {
     return profile[field] === undefined || profile[field] === null || profile[field] === '';
   });
+}
+
+function sanitizeMedicinePayload(payload = {}) {
+  const allowed = [
+    'name',
+    'genericName',
+    'brand',
+    'category',
+    'dosageForm',
+    'strength',
+    'unitPrice',
+    'mrp',
+    'stock',
+    'lowStockThreshold',
+    'available',
+    'requiresPrescription',
+    'manufacturer',
+    'description',
+    'isActive',
+  ];
+  return allowed.reduce((acc, field) => {
+    if (payload[field] !== undefined) acc[field] = payload[field];
+    return acc;
+  }, {});
 }
 
 async function cleanupUser(userId) {

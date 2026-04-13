@@ -2,12 +2,14 @@ const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Patient = require('../models/Patient');
 const Prescription = require('../models/Prescription');
+const Medicine = require('../models/Medicine');
 const { success, error, paginate } = require('../utils/apiResponse');
 const { ORDER_STATUS, PAYMENT_STATUS, PAGINATION, ROLES } = require('../utils/constants');
 
 const POPULATE_FIELDS = [
   { path: 'patient', populate: { path: 'userId', select: 'name email phone avatar' } },
   { path: 'prescription', select: 'rxId diagnosis medicines status' },
+  { path: 'items.medicine', select: 'name genericName brand stock available unitPrice stockStatus' },
   { path: 'statusHistory.updatedBy', select: 'name role' },
 ];
 
@@ -42,7 +44,7 @@ exports.createOrder = async (req, res, next) => {
       if (!prescription) return error(res, 'Prescription not found or not yours', 404);
     }
 
-    const orderItems = normalizeItems(items, prescription);
+    const orderItems = await normalizeItems(items, prescription);
     if (orderItems.length === 0) {
       return error(res, 'Order must include items or a prescription with medicines', 400);
     }
@@ -135,6 +137,10 @@ exports.updateOrderStatus = async (req, res, next) => {
       if (status === ORDER_STATUS.DELIVERED && !order.deliveredAt) {
         order.deliveredAt = new Date();
       }
+      if (status === ORDER_STATUS.DELIVERED && !order.inventoryAdjusted) {
+        await adjustInventoryForDeliveredOrder(order);
+        order.inventoryAdjusted = true;
+      }
       if (status === ORDER_STATUS.CANCELLED && !order.cancelledAt) {
         order.cancelledAt = new Date();
       }
@@ -187,32 +193,103 @@ exports.cancelOrder = async (req, res, next) => {
   }
 };
 
-function normalizeItems(items, prescription) {
-  if (Array.isArray(items) && items.length > 0) {
-    return items.map((item) => ({
-      name: item.name,
-      dosage: item.dosage,
-      frequency: item.frequency,
-      duration: item.duration,
-      instructions: item.instructions,
-      quantity: item.quantity || 1,
-      unitPrice: item.unitPrice || 0,
-    }));
+async function normalizeItems(items, prescription) {
+  const sourceItems =
+    Array.isArray(items) && items.length > 0
+      ? items
+      : prescription?.medicines?.length
+        ? prescription.medicines
+        : [];
+
+  if (sourceItems.length === 0) return [];
+
+  return Promise.all(
+    sourceItems.map(async (item) => {
+      const inventory = await findMatchingMedicine(item);
+      const quantity = Number(item.quantity || 1);
+      const availability = getAvailability(inventory, quantity);
+
+      return {
+        medicine: inventory?._id,
+        name: item.name,
+        dosage: item.dosage,
+        frequency: item.frequency,
+        duration: item.duration,
+        instructions: item.instructions,
+        quantity,
+        unitPrice: item.unitPrice ?? inventory?.unitPrice ?? 0,
+        availabilityStatus: availability.status,
+        availableQuantity: availability.availableQuantity,
+        fulfillmentNote: availability.note,
+      };
+    })
+  );
+}
+
+async function findMatchingMedicine(item = {}) {
+  if (item.medicine && mongoose.Types.ObjectId.isValid(item.medicine)) {
+    return Medicine.findOne({ _id: item.medicine, isActive: true }).lean();
   }
 
-  if (prescription?.medicines?.length) {
-    return prescription.medicines.map((medicine) => ({
-      name: medicine.name,
-      dosage: medicine.dosage,
-      frequency: medicine.frequency,
-      duration: medicine.duration,
-      instructions: medicine.instructions,
-      quantity: medicine.quantity || 1,
-      unitPrice: 0,
-    }));
-  }
+  if (!item.name) return null;
+  const escapedName = escapeRegex(item.name.trim());
+  return Medicine.findOne({
+    isActive: true,
+    name: new RegExp(`^${escapedName}$`, 'i'),
+  }).lean({ virtuals: true });
+}
 
-  return [];
+function getAvailability(inventory, quantity) {
+  if (!inventory) {
+    return {
+      status: 'untracked',
+      availableQuantity: 0,
+      note: 'Not linked to inventory',
+    };
+  }
+  if (!inventory.available || inventory.stock <= 0) {
+    return {
+      status: 'out_of_stock',
+      availableQuantity: Math.max(Number(inventory.stock || 0), 0),
+      note: 'Medicine is currently not available for delivery',
+    };
+  }
+  if (inventory.stock < quantity) {
+    return {
+      status: 'partial',
+      availableQuantity: inventory.stock,
+      note: `Only ${inventory.stock} available`,
+    };
+  }
+  return {
+    status: 'available',
+    availableQuantity: inventory.stock,
+    note: 'Available for delivery',
+  };
+}
+
+async function adjustInventoryForDeliveredOrder(order) {
+  const items = order.items || [];
+  await Promise.all(
+    items
+      .filter((item) => item.medicine && Number(item.quantity || 0) > 0)
+      .map((item) =>
+        Medicine.updateOne(
+          { _id: item.medicine, stock: { $gte: item.quantity } },
+          {
+            $inc: { stock: -item.quantity },
+            $set: {
+              updatedBy:
+                order.statusHistory[order.statusHistory.length - 1]?.updatedBy,
+            },
+          }
+        )
+      )
+  );
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 async function canAccessOrder(user, order) {
@@ -221,7 +298,7 @@ async function canAccessOrder(user, order) {
 
   const patient = await Patient.findOne({ userId: user._id }).select('_id').lean();
   const orderPatientId = order.patient?._id || order.patient;
-  return Boolean(patient && orderPatientId.equals(patient._id));
+  return Boolean(patient && String(orderPatientId) === String(patient._id));
 }
 
 function getPagination(query) {

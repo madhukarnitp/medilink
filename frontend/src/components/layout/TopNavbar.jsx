@@ -62,6 +62,12 @@ const SEARCH_ITEMS = {
       keywords: ["rx", "medicine list", "prescription"],
     },
     {
+      title: "Appointments",
+      description: "Book and manage scheduled visits",
+      page: PAGES.APPOINTMENTS,
+      keywords: ["appointment", "booking", "schedule", "slot"],
+    },
+    {
       title: "Order medicines",
       description: "Buy medicines from prescription",
       page: PAGES.ORDERS,
@@ -106,6 +112,12 @@ const SEARCH_ITEMS = {
       keywords: ["chat", "video", "consultation", "patient"],
     },
     {
+      title: "Appointments",
+      description: "Confirm scheduled patient visits",
+      page: PAGES.APPOINTMENTS,
+      keywords: ["appointment", "booking", "schedule", "slot"],
+    },
+    {
       title: "Profile",
       description: "Update professional profile",
       page: PAGES.PROFILE,
@@ -114,24 +126,34 @@ const SEARCH_ITEMS = {
   ],
   admin: [
     {
-      title: "Admin panel",
-      description: "Platform overview",
+      title: "Admin overview",
+      description: "Platform summary and priorities",
       page: PAGES.ADMIN_DASHBOARD,
       keywords: ["admin", "dashboard", "control"],
     },
     {
-      title: "User verification",
-      description: "Approve pending users",
-      page: PAGES.ADMIN_DASHBOARD,
-      params: { section: "users", search: "verification" },
+      title: "Manage users",
+      description: "Approve accounts and access",
+      page: PAGES.ADMIN_USERS,
       keywords: ["verify", "verification", "users", "approve"],
+    },
+    {
+      title: "Doctor approvals",
+      description: "Review doctor credentials",
+      page: PAGES.ADMIN_DOCTORS,
+      keywords: ["doctor", "doctors", "credentials", "approval"],
     },
     {
       title: "Manage orders",
       description: "Update pharmacy order status",
-      page: PAGES.ADMIN_DASHBOARD,
-      params: { section: "orders", search: "orders" },
+      page: PAGES.ADMIN_ORDERS,
       keywords: ["order", "orders", "delivery", "pharmacy"],
+    },
+    {
+      title: "Medicine inventory",
+      description: "Stock, price, and availability",
+      page: PAGES.ADMIN_MEDICINES,
+      keywords: ["medicine", "inventory", "stock", "pharmacy"],
     },
     {
       title: "Profile",

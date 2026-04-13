@@ -43,7 +43,6 @@ const consultationSchema = new mongoose.Schema(
 
     review: reviewSchema,
 
-    // 🔥 FIXED: roomId for WebSocket rooms
     roomId: {
       type: String,
       //unique: true,
@@ -59,7 +58,7 @@ const consultationSchema = new mongoose.Schema(
   }
 );
 
-// 🔥 IMPROVED: Unique roomId generator
+// Unique roomId generator
 const generateRoomId = () => {
   const ts = Date.now().toString(36);
   const rand = Math.random().toString(36).slice(2, 8);
@@ -88,14 +87,14 @@ consultationSchema.methods.endConsultation = async function () {
   await this.save();
 };
 
-// 🔥 OPTIMAL INDEXES (Video call performance)
+// Query indexes for consultation lists and realtime room lookup.
 consultationSchema.index({ patient: 1, status: 1 });
 consultationSchema.index({ doctor: 1, status: 1 });
 consultationSchema.index({ patient: 1, createdAt: -1 });
 consultationSchema.index({ doctor: 1, createdAt: -1 });
 consultationSchema.index({ patient: 1, status: 1, createdAt: -1 });
 consultationSchema.index({ doctor: 1, status: 1, createdAt: -1 });
-consultationSchema.index({ roomId: 1 });        // ✅ WebSocket lookup
+consultationSchema.index({ roomId: 1 });
 consultationSchema.index({ status: 1, createdAt: -1 }); // Dashboard lists
 
 module.exports = mongoose.model('Consultation', consultationSchema);

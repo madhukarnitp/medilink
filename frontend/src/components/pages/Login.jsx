@@ -47,10 +47,7 @@ export default function Login() {
     try {
       await login(email.trim().toLowerCase(), password);
     } catch (err) {
-      if (
-        err.code === "EMAIL_NOT_VERIFIED" ||
-        /verify/i.test(err.message || "")
-      ) {
+      if (err.code === "EMAIL_NOT_VERIFIED") {
         const nextEmail = email.trim().toLowerCase();
         setVerificationEmail(nextEmail);
         setTab("verify");
@@ -61,8 +58,20 @@ export default function Login() {
           const { auth } = await import("../../services/api");
           await auth.requestVerification(nextEmail);
         } catch {}
+      } else if (err.code === "ACCOUNT_NOT_VERIFIED") {
+        setError(err.message || "Your account is pending admin verification.");
+        setNotice(
+          "Your account is waiting for admin approval. You can login once verification is completed.",
+        );
+      } else if (err.code === "ACCOUNT_BLOCKED") {
+        setError(err.message || "Your account has been blocked.");
+        setNotice(
+          "Please contact support if you believe this is a mistake.",
+        );
       }
-      setError(err.message || "Invalid credentials");
+      if (err.code !== "EMAIL_NOT_VERIFIED") {
+        setError(err.message || "Invalid credentials");
+      }
       setPassword("");
     } finally {
       setLoading(false);
@@ -115,7 +124,11 @@ export default function Login() {
       if (needsVerification) {
         setVerificationEmail(payload.email);
         setTab("verify");
-        setNotice("Account created. Please verify your email before login.");
+        setNotice(
+          role === "doctor"
+            ? "Account created. Verify your email first. After that, admin approval is required before login."
+            : "Account created. Please verify your email before login.",
+        );
         try {
           await auth.requestVerification(payload.email);
         } catch {}

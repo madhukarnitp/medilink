@@ -34,6 +34,14 @@ module.exports = {
     REFUNDED: 'refunded',
   },
 
+  APPOINTMENT_STATUS: {
+    REQUESTED: 'requested',
+    CONFIRMED: 'confirmed',
+    CANCELLED: 'cancelled',
+    COMPLETED: 'completed',
+    MISSED: 'missed',
+  },
+
   PAYMENT_METHODS: ['cod', 'card', 'upi', 'insurance'],
 
   SPECIALIZATIONS: [

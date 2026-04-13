@@ -181,6 +181,15 @@ export default function DoctorList() {
                     ? "Consult Now"
                     : "Unavailable"}
               </Button>
+              <Button
+                fullWidth
+                onClick={() =>
+                  navigate(PAGES.APPOINTMENTS, { doctorId: doc._id })
+                }
+                variant="outline"
+              >
+                Book Appointment
+              </Button>
             </div>
           ))}
           {visibleDoctors.length === 0 && (

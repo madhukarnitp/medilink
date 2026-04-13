@@ -1,7 +1,11 @@
 import { useState, useEffect } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
 import { Button, Spinner, ErrorMsg } from "../ui/UI";
-import { patients as patientsApi } from "../../services/api";
+import {
+  patients as patientsApi,
+  prescriptionCache,
+  prescriptionSelection,
+} from "../../services/api";
 import styles from "./CSS/PrescriptionList.module.css";
 
 const getStatusClassName = (status) =>
@@ -24,7 +28,9 @@ export default function PrescriptionList() {
     setError("");
     try {
       const r = await patientsApi.getPrescriptions();
-      setRxList(r.data || []);
+      const items = r.data || [];
+      setRxList(items);
+      prescriptionCache.saveList(items);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -147,9 +153,14 @@ export default function PrescriptionList() {
             <div className={styles.actions}>
               <Button
                 variant="outline"
-                onClick={() =>
-                  navigate(PAGES.PRESCRIPTION, { prescriptionId: rx._id })
-                }
+                onClick={() => {
+                  prescriptionCache.saveItem(rx);
+                  prescriptionSelection.set(rx._id);
+                  navigate(PAGES.PRESCRIPTION, {
+                    prescriptionId: rx._id,
+                    prescription: rx,
+                  });
+                }}
               >
                 View More
               </Button>

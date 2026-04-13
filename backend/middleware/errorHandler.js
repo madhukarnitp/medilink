@@ -33,9 +33,9 @@ const errorHandler = (err, req, res, next) => {
 
   // Log after normalizing known errors so expected 4xx errors are not reported as 500s.
   if (statusCode >= 500) {
-    console.error(`[${req.method}] ${req.originalUrl} — ${err.stack || err.message}`);
+    console.error(`[http] ${req.method} ${req.originalUrl} failed: ${err.stack || err.message}`);
   } else {
-    console.warn(`[${req.method}] ${req.originalUrl} — ${statusCode}: ${message}`);
+    console.warn(`[http] ${req.method} ${req.originalUrl} returned ${statusCode}: ${message}`);
   }
 
   res.status(statusCode).json({

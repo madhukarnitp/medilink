@@ -5,6 +5,7 @@ const Doctor = require('../models/Doctor');
 const { success, error, paginate } = require('../utils/apiResponse');
 const { sendEmail, emailTemplates } = require('../utils/email');
 const { CONSULTATION_STATUS, PAGINATION, SOCKET_EVENTS } = require('../utils/constants');
+const { createNotification } = require('../utils/notifications');
 
 // Lazy-import socket helpers to avoid circular dep
 const getIO = () => {
@@ -48,7 +49,7 @@ exports.startConsultation = async (req, res, next) => {
       return success(res, populatedExisting, 200, { reused: true });
     }
 
-    // ✅ GENERATE UNIQUE ROOM ID
+    // Generate a unique socket room id for chat and WebRTC.
     const timestamp = Date.now();
     const randomStr = Math.random().toString(36).substr(2, 9);
     const roomId = `room-${patient._id.toString().slice(-6)}-${timestamp}-${randomStr}`;
@@ -58,17 +59,17 @@ exports.startConsultation = async (req, res, next) => {
       doctor: doctor._id,
       reason,
       status: CONSULTATION_STATUS.PENDING,
-      roomId,  // ✅ Unique roomId for WebRTC
+      roomId,
     });
 
-    console.log(`New consultation created: ${consultation._id}, room: ${roomId}`);
+    console.log(`[consultations] Consultation created: id=${consultation._id}, room=${roomId}`);
 
     // Notify doctor via email
     try {
       const tmpl = emailTemplates.consultationStarted(doctor.userId.name, patient.userId.name);
       await sendEmail({ to: doctor.userId.email, ...tmpl });
     } catch (emailErr) {
-      console.warn(`Consultation email failed: ${emailErr.message}`);
+      console.warn(`[consultations] Consultation email delivery failed: ${emailErr.message}`);
     }
 
     const populated = await consultation.populate([
@@ -85,7 +86,7 @@ exports.startConsultation = async (req, res, next) => {
 
     return success(res, populated, 201);
   } catch (err) {
-    console.error(`startConsultation error: ${err.message}`);
+    console.error(`[consultations] Consultation start failed: ${err.message}`);
     
     // Handle duplicate key errors specifically
     if (err.code === 11000) {
@@ -100,25 +101,36 @@ function notifyDoctorConsultationRequest({ consultation, doctor, patient, reason
   try {
     const { emitToUser } = require('../socket/handlers');
     const io = require('../socket/ioInstance').get();
-    if (!io || !doctor?.userId?._id) return;
+    if (io && doctor?.userId?._id) {
+      emitToUser(io, doctor.userId._id, 'consultationRequest', {
+        consultationId: consultation._id,
+        roomId: consultation.roomId,
+        status: consultation.status,
+        reused,
+        patient: {
+          name: patient.userId?.name || 'A patient',
+          id: patient._id,
+        },
+        reason: reason || 'General consultation',
+        createdAt: consultation.createdAt,
+      });
 
-    emitToUser(io, doctor.userId._id, 'consultationRequest', {
-      consultationId: consultation._id,
-      roomId: consultation.roomId,
-      status: consultation.status,
-      reused,
-      patient: {
-        name: patient.userId?.name || 'A patient',
-        id: patient._id,
-      },
-      reason: reason || 'General consultation',
-      createdAt: consultation.createdAt,
-    });
-
-    console.log(`Socket consultation notification sent to doctor ${doctor.userId.name}`);
+      console.log(`[consultations] Socket notification sent to doctor ${doctor.userId.name}`);
+    }
   } catch (socketErr) {
-    console.warn(`Socket notification failed: ${socketErr.message}`);
+    console.warn(`[consultations] Socket notification failed: ${socketErr.message}`);
   }
+
+  createNotification({
+    user: doctor.userId?._id,
+    title: reused ? 'Consultation request reopened' : 'New consultation request',
+    body: reason
+      ? `${patient.userId?.name || 'A patient'}: ${reason}`
+      : `${patient.userId?.name || 'A patient'} requested a consultation.`,
+    type: 'consultation_request',
+    page: 'consultation',
+    params: { consultationId: consultation._id },
+  });
 }
 
 /**
@@ -153,7 +165,7 @@ exports.leaveConsultation = async (req, res, next) => {
         });
       }
     } catch (socketErr) {
-        console.warn(`End consultation socket notification failed: ${socketErr.message}`);
+        console.warn(`[consultations] Leave signal failed: ${socketErr.message}`);
     }
 
     return success(res, { message: 'Call leave acknowledged' }, 202);
@@ -235,8 +247,16 @@ exports.acceptConsultation = async (req, res, next) => {
             doctorName: consultation.doctor?.userId?.name || 'Your doctor',
           });
         }
+        await createNotification({
+          user: patientUserId,
+          title: 'Consultation accepted',
+          body: `${consultation.doctor?.userId?.name || 'Your doctor'} accepted your consultation request.`,
+          type: 'consultation_accepted',
+          page: 'consultation',
+          params: { consultationId: consultation._id },
+        });
       } catch (socketErr) {
-        console.warn(`Accept notification failed: ${socketErr.message}`);
+        console.warn(`[consultations] Accept notification failed: ${socketErr.message}`);
       }
     }
 
@@ -305,8 +325,21 @@ exports.endConsultation = async (req, res, next) => {
           io.to(roomId).emit(SOCKET_EVENTS.CONSULTATION_ENDED, payload);
           io.to(roomId).emit('webrtc:call-ended', payload);
         }
+
+        const patientUserId = populated.patient?.userId?._id || populated.patient?.userId;
+        const doctorUserId = populated.doctor?.userId?._id || populated.doctor?.userId;
+        const targetUserId =
+          req.user.role === 'doctor' ? patientUserId : doctorUserId;
+        await createNotification({
+          user: targetUserId,
+          title: 'Consultation ended',
+          body: 'Your live consultation has been closed.',
+          type: 'consultation_ended',
+          page: 'consultation_list',
+          params: { consultationId: consultation._id },
+        });
       } catch (socketErr) {
-        console.warn(`End consultation socket notification failed: ${socketErr.message}`);
+        console.warn(`[consultations] End notification failed: ${socketErr.message}`);
       }
     }
 

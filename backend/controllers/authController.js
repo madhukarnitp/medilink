@@ -44,13 +44,19 @@ exports.register = async (req, res, next) => {
       const tmpl = emailTemplates.verifyEmail(user.name, verifyUrl);
       await sendEmail({ to: user.email, ...tmpl });
     } catch (emailErr) {
-      console.warn(`Email verification send failed: ${emailErr.message}`);
+      console.warn(`[auth] Email verification delivery failed for ${email}: ${emailErr.message}`);
     }
 
-    const token = user.getSignedToken();
-    const refreshToken = user.getRefreshToken();
-
-    return success(res, { token, refreshToken, user: user.toSafeJSON() }, 201);
+    return success(
+      res,
+      {
+        user: user.toSafeJSON(),
+        requiresVerification: true,
+        emailVerificationRequired: true,
+        accountVerificationRequired: requestedRole === ROLES.DOCTOR,
+      },
+      201
+    );
   } catch (err) {
     if (user?._id) {
       await Promise.allSettled([
@@ -72,10 +78,14 @@ exports.login = async (req, res, next) => {
 
     const user = await User.findOne({ email }).select('+password');
     if (!user) return error(res, 'Invalid credentials', 401);
-    if (!user.isActive) return error(res, 'Account is deactivated', 401);
 
     const isMatch = await user.matchPassword(password);
     if (!isMatch) return error(res, 'Invalid credentials', 401);
+
+    const authBlock = await getAuthenticationBlock(user);
+    if (authBlock) {
+      return error(res, authBlock.message, authBlock.statusCode);
+    }
 
     // Update lastSeen
     user.lastSeen = new Date();
@@ -89,7 +99,7 @@ exports.login = async (req, res, next) => {
     const token = user.getSignedToken();
     const refreshToken = user.getRefreshToken();
 
-    console.log(`User logged in: ${email}`);
+    console.log(`[auth] User signed in: ${email}`);
     return success(res, { token, refreshToken, user: user.toSafeJSON() });
   } catch (err) {
     next(err);
@@ -141,7 +151,12 @@ exports.refreshToken = async (req, res, next) => {
     const jwt = require('jsonwebtoken');
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id);
-    if (!user || !user.isActive) return error(res, 'Invalid refresh token', 401);
+    if (!user) return error(res, 'Invalid refresh token', 401);
+
+    const authBlock = await getAuthenticationBlock(user);
+    if (authBlock) {
+      return error(res, authBlock.message, authBlock.statusCode === 401 ? 401 : 403);
+    }
 
     const newToken = user.getSignedToken();
     const newRefreshToken = user.getRefreshToken();
@@ -246,3 +261,41 @@ exports.changePassword = async (req, res, next) => {
     next(err);
   }
 };
+
+async function getAuthenticationBlock(user) {
+  // Check if account is blocked/deactivated
+  if (!user.isActive) {
+    return {
+      message: 'Your account has been blocked. Please contact support.',
+      statusCode: 401,
+      code: 'ACCOUNT_BLOCKED',
+    };
+  }
+
+  // Email verification is MANDATORY for all users
+  if (!user.isEmailVerified) {
+    return {
+      message: 'Please verify your email before logging in',
+      statusCode: 403,
+      code: 'EMAIL_NOT_VERIFIED',
+    };
+  }
+
+  // Doctor-specific verification required
+  if (user.role === ROLES.DOCTOR) {
+    const doctorProfile = await Doctor.findOne({ userId: user._id })
+      .select('isVerified')
+      .lean();
+
+    if (!doctorProfile?.isVerified) {
+      return {
+        message: 'Your doctor account is pending admin verification. You will be able to login once verified.',
+        statusCode: 403,
+        code: 'DOCTOR_NOT_VERIFIED',
+      };
+    }
+  }
+
+  // All verification passed
+  return null;
+}

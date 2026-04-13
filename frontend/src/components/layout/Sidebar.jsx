@@ -22,6 +22,12 @@ const PATIENT_NAV_ITEMS = [
     icon: MessageIcon,
   },
   {
+    page: PAGES.APPOINTMENTS,
+    label: "Appointments",
+    mobileLabel: "Visits",
+    icon: CalendarIcon,
+  },
+  {
     page: PAGES.PRESCRIPTION_LIST,
     label: "Prescriptions",
     mobileLabel: "Rx",
@@ -60,6 +66,12 @@ const DOCTOR_NAV_ITEMS = [
     label: "Consultations",
     mobileLabel: "Chats",
     icon: MessageIcon,
+  },
+  {
+    page: PAGES.APPOINTMENTS,
+    label: "Appointments",
+    mobileLabel: "Visits",
+    icon: CalendarIcon,
   },
 ];
 
@@ -269,6 +281,27 @@ function PlusIcon() {
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
       <path
         d="M8 2v12M2 8h12"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+function CalendarIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <rect
+        x="2"
+        y="3"
+        width="12"
+        height="11"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <path
+        d="M5 1.8v2.4M11 1.8v2.4M2 6h12"
         stroke="currentColor"
         strokeWidth="1.3"
         strokeLinecap="round"

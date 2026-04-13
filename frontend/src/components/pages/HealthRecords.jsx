@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { useApp } from "../../context/AppContext";
 import { Spinner } from "../ui/UI";
-import { patients as patientsApi } from "../../services/api";
+import {
+  patients as patientsApi,
+  prescriptionCache,
+} from "../../services/api";
 import styles from "./CSS/HealthRecords.module.css";
 
 const TABS = ["Reports", "Vitals", "Prescriptions"];
@@ -89,7 +92,9 @@ export default function HealthRecords() {
           patientsApi.getPrescriptions(),
           patientsApi.getProfile(),
         ]);
-        setRxList(rxRes.data || []);
+        const items = rxRes.data || [];
+        setRxList(items);
+        prescriptionCache.saveList(items);
         setProfile(profRes.data);
       } catch {
       } finally {

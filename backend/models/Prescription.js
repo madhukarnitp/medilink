@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const { PRESCRIPTION_STATUS } = require('../utils/constants');
-const { randomUUID } = require('crypto'); // ✅ FIXED
+const { randomUUID } = require('crypto');
 
 const medicineSchema = new mongoose.Schema(
   {
@@ -18,7 +18,7 @@ const prescriptionSchema = new mongoose.Schema(
   {
     rxId: {
       type: String,
-      unique: true, // ✅ creates index automatically
+      unique: true,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -66,10 +66,10 @@ const prescriptionSchema = new mongoose.Schema(
   }
 );
 
-// 🔥 Auto-generate rxId
+// Auto-generate rxId
 prescriptionSchema.pre('save', function (next) {
   if (!this.rxId) {
-    this.rxId = `RX-${randomUUID().slice(0, 8).toUpperCase()}`; // ✅ better unique ID
+    this.rxId = `RX-${randomUUID().slice(0, 8).toUpperCase()}`;
   }
 
   // Auto-expire
@@ -80,7 +80,7 @@ prescriptionSchema.pre('save', function (next) {
   next();
 });
 
-// ✅ Indexes (optimized, no duplicate)
+// Query indexes
 prescriptionSchema.index({ createdFor: 1, status: 1 });
 prescriptionSchema.index({ createdBy: 1 });
 prescriptionSchema.index({ createdFor: 1, createdAt: -1 });
@@ -90,7 +90,7 @@ prescriptionSchema.index({ createdBy: 1, status: 1, createdAt: -1 });
 
 // ❌ REMOVED duplicate: prescriptionSchema.index({ rxId: 1 });
 
-// 🔥 Virtual: isExpired
+// Virtual: isExpired
 prescriptionSchema.virtual('isExpired').get(function () {
   return this.expiresAt < new Date();
 });
