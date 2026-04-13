@@ -21,6 +21,7 @@ const Orders = lazy(() => import("./components/pages/Orders"));
 const SOSPage = lazy(() => import("./components/pages/SOSPage"));
 const AdminDashboard = lazy(() => import("./components/pages/AdminDashboard"));
 const Profile = lazy(() => import("./components/pages/Profile"));
+const ErrorPage = lazy(() => import("./components/pages/ErrorPage"));
 const ChatbotWidget = lazy(() => import("./components/ui/ChatbotWidget"));
 
 const loadingFallback = (
@@ -32,6 +33,7 @@ const loadingFallback = (
 const adminPages = {
   [PAGES.ADMIN_DASHBOARD]: AdminDashboard,
   [PAGES.PROFILE]: Profile,
+  [PAGES.NOT_FOUND]: ErrorPage,
 };
 
 const doctorPages = {
@@ -41,6 +43,7 @@ const doctorPages = {
   [PAGES.CONSULTATION]: Consultation,
   [PAGES.PRESCRIPTION]: Prescription,
   [PAGES.PROFILE]: Profile,
+  [PAGES.NOT_FOUND]: ErrorPage,
 };
 
 const patientPages = {
@@ -54,6 +57,7 @@ const patientPages = {
   [PAGES.ORDERS]: Orders,
   [PAGES.SOS]: SOSPage,
   [PAGES.PROFILE]: Profile,
+  [PAGES.NOT_FOUND]: ErrorPage,
 };
 
 function PageRouter() {
@@ -61,11 +65,11 @@ function PageRouter() {
   let Page;
 
   if (user?.role === "admin") {
-    Page = adminPages[activePage] ?? AdminDashboard;
+    Page = adminPages[activePage] ?? ErrorPage;
   } else if (user?.role === "doctor") {
-    Page = doctorPages[activePage] ?? DoctorDashboard;
+    Page = doctorPages[activePage] ?? ErrorPage;
   } else {
-    Page = patientPages[activePage] ?? Dashboard;
+    Page = patientPages[activePage] ?? ErrorPage;
   }
 
   return <Page />;
@@ -91,6 +95,7 @@ function AppContent() {
     !isAuthenticated &&
     activePage === PAGES.PRESCRIPTION &&
     selectedPrescriptionId;
+  const isPublicError = !isAuthenticated && activePage === PAGES.NOT_FOUND;
 
   if (isPublicPrescription) {
     return (
@@ -107,7 +112,7 @@ function AppContent() {
     return (
       <>
         <Suspense fallback={loadingFallback}>
-          <Login />
+          {isPublicError ? <ErrorPage /> : <Login />}
         </Suspense>
         <Toast onDismiss={dismissToast} toasts={toasts} />
       </>

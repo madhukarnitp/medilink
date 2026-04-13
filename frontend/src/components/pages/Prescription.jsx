@@ -36,6 +36,7 @@ export default function Prescription() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [qrCodeUrl, setQrCodeUrl] = useState("");
+  const isPublicVerification = !user;
 
   useEffect(() => {
     if (!selectedPrescriptionId) {
@@ -91,6 +92,15 @@ export default function Prescription() {
         </div>
       </div>
     );
+  if (error && isPublicVerification)
+    return (
+      <PublicVerificationState
+        message={error}
+        onHome={() => {
+          window.location.href = "/";
+        }}
+      />
+    );
   if (error)
     return (
       <div className={styles.page}>
@@ -98,6 +108,15 @@ export default function Prescription() {
       </div>
     );
   if (!rx)
+    if (isPublicVerification)
+      return (
+        <PublicVerificationState
+          message="No prescription record was found for this QR code."
+          onHome={() => {
+            window.location.href = "/";
+          }}
+        />
+      );
     return (
       <div className={styles.page}>
         <div className={styles.empty}>
@@ -209,7 +228,7 @@ export default function Prescription() {
           </button>
         </div>
         <div>
-          <h1>{user ? "Prescription" : "Prescription Verification"}</h1>
+          <h1>{isPublicVerification ? "Prescription Verification" : "Prescription"}</h1>
           <p>
             Issued by {docName} ·{" "}
             {new Date(rx.createdAt).toLocaleDateString("en-IN", {
@@ -247,7 +266,7 @@ export default function Prescription() {
           </div>
         </div>
         {rx.verification?.verified && (
-          <div className={styles.warningBanner}>
+          <div className={styles.successBanner}>
             Verified MediLink prescription. Checked{" "}
             {new Date(rx.verification.checkedAt).toLocaleString("en-IN", {
               day: "numeric",
@@ -367,6 +386,39 @@ export default function Prescription() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function PublicVerificationState({ message, onHome }) {
+  const isNotFound = /not found/i.test(message || "");
+
+  return (
+    <div className={styles.publicPage}>
+      <section className={styles.verifyPanel}>
+        <div className={styles.verifyMarkError}>{isNotFound ? "404" : "!"}</div>
+        <div className={styles.verifyContent}>
+          <span className={styles.verifyEyebrow}>Prescription verification</span>
+          <h1>{isNotFound ? "Prescription not found" : "Verification failed"}</h1>
+          <p>
+            {isNotFound
+              ? "This QR code does not match an active MediLink prescription record."
+              : "MediLink could not verify this prescription right now. Check the QR code or try again."}
+          </p>
+          <div className={styles.verifyReason}>
+            <span>Status</span>
+            <strong>{message || "Unable to verify prescription"}</strong>
+          </div>
+          <div className={styles.verifyActions}>
+            <button onClick={() => window.location.reload()} type="button">
+              Try again
+            </button>
+            <button onClick={onHome} type="button">
+              Go to MediLink
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

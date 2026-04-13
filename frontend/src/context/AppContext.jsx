@@ -36,6 +36,7 @@ export const PAGES = {
   CREATE_PRESCRIPTION: "create_prescription",
   DOCTOR_PRESCRIPTIONS: "doctor_prescriptions",
   ADMIN_DASHBOARD: "admin_dashboard",
+  NOT_FOUND: "not_found",
 };
 
 const getHomePage = (role) => {
@@ -51,6 +52,8 @@ const getDeepLinkTarget = () => {
   const source = rawHash || window.location.pathname.replace(/^\/+/, "");
   const [route] = source.split(/[?#]/);
   const parts = route.split("/").filter(Boolean);
+
+  if (parts.length === 0) return null;
 
   if (parts[0] === "prescription" && parts[1]) {
     return {
@@ -69,7 +72,10 @@ const getDeepLinkTarget = () => {
     };
   }
 
-  return null;
+  return {
+    page: PAGES.NOT_FOUND,
+    params: { attemptedPath: `/${route}` },
+  };
 };
 
 const getToastTypeForNotification = (type) => {
@@ -136,7 +142,10 @@ export function AppProvider({ children }) {
       const token = localStorage.getItem("ml_token");
       if (!token) {
         const target = pendingDeepLinkRef.current;
-        if (target?.page === PAGES.PRESCRIPTION) {
+        if (
+          target?.page === PAGES.PRESCRIPTION ||
+          target?.page === PAGES.NOT_FOUND
+        ) {
           applyNavigationTarget(target.page, target.params || {});
         }
         setLoading(false);

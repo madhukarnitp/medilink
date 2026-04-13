@@ -1,0 +1,59 @@
+import { PAGES, useApp } from "../../context/AppContext";
+import styles from "./CSS/ErrorPage.module.css";
+
+export default function ErrorPage({
+  code = "404",
+  title = "Page not found",
+  message,
+}) {
+  const { isAuthenticated, navigate, pageParams, user } = useApp();
+  const homePage =
+    user?.role === "admin"
+      ? PAGES.ADMIN_DASHBOARD
+      : user?.role === "doctor"
+        ? PAGES.DOCTOR_DASHBOARD
+        : PAGES.DASHBOARD;
+  const attemptedPath = pageParams?.attemptedPath;
+  const body =
+    message ||
+    "This link does not match any MediLink page. Check the address or return to a known page.";
+
+  const goHome = () => {
+    if (isAuthenticated) {
+      navigate(homePage);
+      return;
+    }
+    window.location.href = "/";
+  };
+
+  return (
+    <div className={styles.page}>
+      <section className={styles.panel}>
+        <div className={styles.code}>{code}</div>
+        <div className={styles.copy}>
+          <span className={styles.eyebrow}>MediLink route check</span>
+          <h1>{title}</h1>
+          <p>{body}</p>
+          {attemptedPath && (
+            <div className={styles.path}>
+              <span>Requested path</span>
+              <strong>{attemptedPath}</strong>
+            </div>
+          )}
+          <div className={styles.actions}>
+            <button className={styles.primaryBtn} onClick={goHome} type="button">
+              Go to home
+            </button>
+            <button
+              className={styles.secondaryBtn}
+              onClick={() => window.history.back()}
+              type="button"
+            >
+              Go back
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

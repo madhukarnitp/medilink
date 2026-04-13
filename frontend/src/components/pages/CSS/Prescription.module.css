@@ -158,6 +158,15 @@
   font-weight: 500;
 }
 
+.successBanner {
+  padding: 12px 24px;
+  background: #ECFDF5;
+  border-bottom: 1px solid var(--border);
+  color: #047857;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .validityBox {
   padding: 16px 24px;
   background: var(--surface);
@@ -343,4 +352,140 @@
   background: none;
   border: none;
   cursor: pointer;
+}
+
+.publicPage {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--surface);
+}
+
+.verifyPanel {
+  width: min(780px, 100%);
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 24px;
+  align-items: center;
+  padding: 24px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 18px 54px rgba(17, 24, 39, 0.08);
+}
+
+.verifyMarkError {
+  min-height: 136px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #B91C1C;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.verifyContent {
+  min-width: 0;
+}
+
+.verifyEyebrow {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.verifyContent h1 {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.verifyContent p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.verifyReason {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.verifyReason span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.verifyReason strong {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.verifyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.verifyActions button {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.verifyActions button:first-child {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.verifyActions button:last-child {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+@media (max-width: 680px) {
+  .publicPage {
+    padding: 14px;
+  }
+
+  .verifyPanel {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 18px;
+  }
+
+  .verifyMarkError {
+    min-height: 96px;
+    font-size: 30px;
+  }
+
+  .verifyActions {
+    display: grid;
+  }
 }
