@@ -376,7 +376,7 @@ export function AppProvider({ children }) {
         ) {
           applyNavigationTarget(target.page, target.params || {});
         } else {
-          routerNavigate("/login", { replace: true });
+          routerNavigate("/", { replace: true });
         }
       } finally {
         if (!saved) setLoading(false);
@@ -567,7 +567,7 @@ export function AppProvider({ children }) {
     setSelectedConsultationId(null);
     setNotifications(0);
     setNotificationItems([]);
-    routerNavigate("/login", { replace: true });
+    routerNavigate("/", { replace: true });
     showToast("Logged out successfully");
   }, [routerNavigate, showToast]);
 
