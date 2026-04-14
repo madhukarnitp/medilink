@@ -100,6 +100,12 @@ const SEARCH_ITEMS = {
       keywords: ["new", "create", "prescription", "rx"],
     },
     {
+      title: "My patients",
+      description: "Patients who consulted with you",
+      page: PAGES.DOCTOR_PATIENTS,
+      keywords: ["patients", "old patients", "consulted", "history"],
+    },
+    {
       title: "My prescriptions",
       description: "View issued prescriptions",
       page: PAGES.DOCTOR_PRESCRIPTIONS,
@@ -110,6 +116,12 @@ const SEARCH_ITEMS = {
       description: "Open live consultation room",
       page: PAGES.CONSULTATION,
       keywords: ["chat", "video", "consultation", "patient"],
+    },
+    {
+      title: "Consultation records",
+      description: "Review all patient consultations",
+      page: PAGES.CONSULTATION_LIST,
+      keywords: ["records", "history", "past consultations", "patients"],
     },
     {
       title: "Appointments",

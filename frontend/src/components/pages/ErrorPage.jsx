@@ -1,4 +1,4 @@
-import { PAGES, useApp } from "../../context/AppContext";
+import { getHomePage, useApp } from "../../context/AppContext";
 import styles from "./CSS/ErrorPage.module.css";
 
 export default function ErrorPage({
@@ -7,12 +7,7 @@ export default function ErrorPage({
   message,
 }) {
   const { isAuthenticated, navigate, pageParams, user } = useApp();
-  const homePage =
-    user?.role === "admin"
-      ? PAGES.ADMIN_DASHBOARD
-      : user?.role === "doctor"
-        ? PAGES.DOCTOR_DASHBOARD
-        : PAGES.DASHBOARD;
+  const homePage = getHomePage(user?.role);
   const attemptedPath = pageParams?.attemptedPath;
   const body =
     message ||
@@ -20,10 +15,18 @@ export default function ErrorPage({
 
   const goHome = () => {
     if (isAuthenticated) {
-      navigate(homePage);
+      navigate(homePage, {}, { updateUrl: true, replace: true });
       return;
     }
     window.location.href = "/";
+  };
+
+  const goBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    goHome();
   };
 
   return (
@@ -46,7 +49,7 @@ export default function ErrorPage({
             </button>
             <button
               className={styles.secondaryBtn}
-              onClick={() => window.history.back()}
+              onClick={goBack}
               type="button"
             >
               Go back

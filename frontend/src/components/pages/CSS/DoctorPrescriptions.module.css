@@ -1,7 +1,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--page-gap-lg);
 }
 
 .loadingWrap {
@@ -332,5 +332,215 @@
 
   .actions button {
     width: 100%;
+  }
+}
+
+/* Compact list spacing */
+.page {
+  gap: 10px;
+}
+
+.headerTitle,
+.header h1 {
+  margin-bottom: 2px;
+}
+
+.header p,
+.headerSubtitle {
+  margin-top: 2px;
+}
+
+.filterBar {
+  gap: 6px;
+}
+
+.filterBtn {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.prescriptionsList {
+  gap: 10px;
+}
+
+.listSpacing {
+  margin-top: 0;
+}
+
+.empty {
+  padding: 28px 16px;
+}
+
+.emptyIcon {
+  font-size: 34px;
+}
+
+.card {
+  padding: 0;
+}
+
+.cardHeader {
+  margin-bottom: 0;
+  padding: 12px;
+}
+
+.diagnosis {
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+
+.meta {
+  font-size: 12px;
+}
+
+.status {
+  padding: 4px 9px;
+  font-size: 11px;
+}
+
+.cardContent {
+  gap: 8px;
+  padding: 10px;
+}
+
+.cardContentSpacing {
+  margin-bottom: 0;
+}
+
+.details {
+  gap: 8px;
+}
+
+.labelHeading {
+  margin-bottom: 6px;
+}
+
+.medicineListWrap {
+  gap: 6px;
+  margin-bottom: 0;
+}
+
+.medicineBadgePill,
+.moreBadge {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.actions {
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 8px 10px 10px;
+}
+
+.actions button,
+.revokeAction {
+  padding: 7px 12px;
+  font-size: 12px;
+  width: auto;
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 0;
+  }
+
+  .header {
+    gap: 8px;
+  }
+
+  .cardHeader {
+    gap: 8px;
+  }
+
+  .cardContent {
+    gap: 8px;
+  }
+
+  .actions {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .actions button,
+  .revokeAction {
+    width: auto;
+  }
+}
+
+/* Dashboard-aligned compact sizing */
+.page {
+  gap: var(--page-gap);
+  padding: 0;
+}
+
+.loadingWrap {
+  padding: 32px;
+}
+
+.header h1,
+.headerTitle,
+.diagnosis {
+  font-size: var(--page-title-size);
+}
+
+.header p,
+.headerSubtitle,
+.meta {
+  font-size: var(--page-subtitle-size);
+}
+
+.filterBtn,
+.status,
+.medicineBadgePill,
+.moreBadge,
+.revokeAction {
+  border-radius: var(--radius-md);
+}
+
+.card,
+.empty,
+.medicineListWrap,
+.detailBox {
+  border-radius: var(--radius-lg);
+}
+
+.cardHeader,
+.cardContent,
+.empty {
+  padding: var(--card-padding);
+}
+
+.filterBtn,
+.actions button,
+.revokeAction {
+  min-height: var(--control-height);
+  font-size: var(--control-font-size);
+}
+
+.emptyIcon {
+  font-size: 30px;
+}
+
+/* Keep action buttons compact instead of stretching across cards. */
+.actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.actions button,
+.revokeAction {
+  flex: 0 1 auto;
+  max-width: 220px;
+  min-width: 96px;
+  width: auto;
+}
+
+@media (max-width: 768px) {
+  .actions button,
+  .revokeAction {
+    max-width: 100%;
+    width: auto;
   }
 }

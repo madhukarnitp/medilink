@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PAGES } from "../../../context/AppContext";
-import { consultations as consultApi } from "../../../services/api";
+import { consultations as consultApi, doctors as doctorsApi } from "../../../services/api";
 import { playIncomingMessageTone } from "../../../services/sounds";
 import {
   connectSocket,
@@ -20,6 +20,8 @@ const ICE_CONFIG = {
     { urls: "stun:stun2.l.google.com:19302" },
   ],
 };
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function useConsultationSession({
   navigate,
@@ -44,6 +46,8 @@ export function useConsultationSession({
   const [screenSharing, setScreenSharing] = useState(false);
   const [hasLocalStream, setHasLocalStream] = useState(false);
   const [hasRemoteStream, setHasRemoteStream] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingData, setRatingData] = useState({ rating: 0, comment: "" });
 
   const bottomRef = useRef(null);
   const typingTimer = useRef(null);
@@ -78,8 +82,9 @@ export function useConsultationSession({
   }, [messages, peerTyping]);
 
   useEffect(() => {
-    ringAudio.current = new Audio("/ringtone.mp3");
+    ringAudio.current = new Audio("/ringtone.mp3?v=medilink-1");
     ringAudio.current.loop = true;
+    ringAudio.current.preload = "auto";
     return () => {
       ringAudio.current?.pause();
       ringAudio.current = null;
@@ -98,14 +103,26 @@ export function useConsultationSession({
 
     (async () => {
       try {
-        const [consultationRes, messagesRes] = await Promise.all([
-          consultApi.getById(selectedConsultationId),
-          consultApi.getMessages(selectedConsultationId),
-        ]);
+        let consultationRes;
+        try {
+          consultationRes = await consultApi.getById(selectedConsultationId);
+        } catch (firstErr) {
+          await wait(350);
+          consultationRes = await consultApi.getById(selectedConsultationId);
+        }
 
         if (ignore) return;
         setConsultation(consultationRes.data);
-        setMessages(messagesRes.data || []);
+
+        try {
+          const messagesRes = await consultApi.getMessages(selectedConsultationId);
+          if (!ignore) setMessages(messagesRes.data || []);
+        } catch (messageErr) {
+          if (!ignore) {
+            setMessages([]);
+            console.warn("Could not load consultation messages:", messageErr.message);
+          }
+        }
       } catch (e) {
         if (!ignore) setError(e.message);
       } finally {
@@ -690,6 +707,26 @@ export function useConsultationSession({
     cleanupCall();
   }, [callStatus, cleanupCall, emitSignal]);
 
+  const submitRating = useCallback(async () => {
+    try {
+      if (ratingData.rating > 0 && consultation?.doctor?._id) {
+        await doctorsApi.addReview(consultation.doctor._id, {
+          rating: ratingData.rating,
+          comment: ratingData.comment,
+          consultationId: selectedConsultationId,
+        });
+        showToast("Thank you for your feedback!", "success");
+      }
+      setShowRatingModal(false);
+      navigate(PAGES.CONSULTATION_LIST);
+    } catch (e) {
+      showToast(e.message || "Could not submit rating", "error");
+      // Still navigate even if rating fails
+      setShowRatingModal(false);
+      navigate(PAGES.CONSULTATION_LIST);
+    }
+  }, [consultation, doctorsApi, navigate, ratingData, selectedConsultationId, showToast]);
+
   const leaveConsultation = useCallback(async () => {
     endCall();
     setPeerReady(false);
@@ -709,6 +746,11 @@ export function useConsultationSession({
           await consultApi.cancel(selectedConsultationId);
         } else if (latestStatus === "active") {
           await consultApi.end(selectedConsultationId);
+          // Show rating modal for patients after ending active consultation
+          if (user?.role === "patient") {
+            setShowRatingModal(true);
+            return; // Don't navigate yet, wait for rating
+          }
         }
       }
     } catch (e) {
@@ -789,6 +831,10 @@ export function useConsultationSession({
       if (!isCurrentConsultation(consultationId)) return;
       setPeerReady(true);
     };
+    const onPeerJoined = ({ consultationId } = {}) => {
+      if (!isCurrentConsultation(consultationId)) return;
+      setPeerReady(true);
+    };
     const onConsultationAccepted = ({ consultationId } = {}) => {
       if (!isCurrentConsultation(consultationId)) return;
       setConsultation((current) =>
@@ -859,6 +905,7 @@ export function useConsultationSession({
     sock.on("webrtc:ice-candidate", onIce);
     sock.on("webrtc:call-ended", onCallEnded);
     sock.on("peerLeft", onPeerLeft);
+    sock.on("peerJoined", onPeerJoined);
     sock.on("readyForCall", onReadyForCall);
     sock.on("consultationAccepted", onConsultationAccepted);
     sock.on(EVENTS.VIDEO_CALL_DECLINED, onVideoCallDeclined);
@@ -877,6 +924,7 @@ export function useConsultationSession({
       sock.off("webrtc:ice-candidate", onIce);
       sock.off("webrtc:call-ended", onCallEnded);
       sock.off("peerLeft", onPeerLeft);
+      sock.off("peerJoined", onPeerJoined);
       sock.off("readyForCall", onReadyForCall);
       sock.off("consultationAccepted", onConsultationAccepted);
       sock.off(EVENTS.VIDEO_CALL_DECLINED, onVideoCallDeclined);
@@ -935,6 +983,10 @@ export function useConsultationSession({
     sending,
     socketReady,
     videoOn,
+    showRatingModal,
+    ratingData,
+    setRatingData,
+    submitRating,
     acceptCall,
     acceptConsultation,
     declineCall,

@@ -162,7 +162,7 @@ export default function AdminShell({ children }) {
         </aside>
 
         <main className={`${styles.main} ${sidebarCollapsed ? styles.mainExpanded : ""}`}>
-          {children}
+          <div className={styles.content}>{children}</div>
         </main>
       </div>
     </div>

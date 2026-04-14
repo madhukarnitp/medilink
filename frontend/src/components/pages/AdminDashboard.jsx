@@ -379,16 +379,18 @@ function buildStats(dashboard, users, orders, medicines) {
     dashboard?.users ??
     users.length;
   const pendingUsers =
-    dashboard?.stats?.pendingUsers ??
-    users.filter(
-      (user) =>
-        !(
-          user.isEmailVerified ??
-          user.isVerified ??
-          user.emailVerified ??
-          user.verified
-        ),
-    ).length;
+    users.length > 0
+      ? users.filter(
+          (user) =>
+            user.role !== "admin" &&
+            !(
+              user.isEmailVerified ??
+              user.isVerified ??
+              user.emailVerified ??
+              user.verified
+            ),
+        ).length
+      : dashboard?.stats?.pendingUsers ?? 0;
   const totalOrders =
     dashboard?.stats?.orders ??
     dashboard?.totalOrders ??

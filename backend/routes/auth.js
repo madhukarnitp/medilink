@@ -6,6 +6,7 @@ const {
   login,
   logout,
   getMe,
+  updateMe,
   refreshToken,
   verifyEmail,
   forgotPassword,
@@ -13,6 +14,7 @@ const {
   changePassword,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
+const { handleAvatarUpload } = require('../middleware/upload');
 const validate = require('../middleware/validate');
 
 // ── Validation chains ─────────────────────────────────────────────────────────
@@ -48,6 +50,21 @@ const changePasswordRules = [
   body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
 ];
 
+const updateMeRules = [
+  body('name')
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage('Name is required')
+    .isLength({ min: 2, max: 60 })
+    .withMessage('Name must be 2-60 characters'),
+  body('phone')
+    .optional({ checkFalsy: true })
+    .trim()
+    .matches(/^[0-9+\-\s()]{7,15}$/)
+    .withMessage('Invalid phone number'),
+];
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 /**
@@ -70,6 +87,7 @@ router.post('/login', loginRules, validate, login);
 
 router.post('/logout', protect, logout);
 router.get('/me', protect, getMe);
+router.put('/me', protect, handleAvatarUpload, updateMeRules, validate, updateMe);
 router.post('/refresh', refreshToken);
 
 router.get('/verify-email/:token', verifyEmail);

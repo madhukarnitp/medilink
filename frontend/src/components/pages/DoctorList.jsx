@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
 import { StatusBadge, Button, Spinner, ErrorMsg } from "../ui/UI";
 import { doctors as doctorsApi } from "../../services/api";
+import { connectSocket, EVENTS, getSocket } from "../../services/socket";
 import styles from "./CSS/DoctorList.module.css";
 
 const SPECS = [
@@ -28,14 +29,18 @@ export default function DoctorList() {
   const [maxPrice, setMaxPrice] = useState(2000);
   const [starting, setStarting] = useState(null);
   const searchTerm = (pageParams.search || "").trim().toLowerCase();
-  const visibleDoctors = doctors.filter((doc) => {
-    if (!searchTerm) return true;
-    return [doc.userId?.name, doc.specialization, doc.qualification, doc.bio]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase()
-      .includes(searchTerm);
-  });
+  const visibleDoctors = useMemo(
+    () =>
+      doctors.filter((doc) => {
+        if (!searchTerm) return true;
+        return [doc.userId?.name, doc.specialization, doc.qualification, doc.bio]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(searchTerm);
+      }),
+    [doctors, searchTerm],
+  );
 
   useEffect(() => {
     if (pageParams.specialty && SPECS.includes(pageParams.specialty)) {
@@ -43,8 +48,8 @@ export default function DoctorList() {
     }
   }, [pageParams.specialty]);
 
-  const load = async () => {
-    setLoading(true);
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError("");
     try {
       const params = { limit: 50 };
@@ -54,15 +59,71 @@ export default function DoctorList() {
       const r = await doctorsApi.getAll(params);
       setDoctors(r.data || []);
     } catch (e) {
-      setError(e.message);
+      if (!silent) setError(e.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, [maxPrice, onlineOnly, spec]);
 
   useEffect(() => {
     load();
-  }, [spec, onlineOnly, maxPrice]);
+  }, [load]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("ml_token");
+    const socket = getSocket() || (token ? connectSocket(token) : null);
+    if (!socket) return undefined;
+
+    const sameDoctorUser = (doc, doctorUserId) =>
+      String(doc.userId?._id || doc.userId) === String(doctorUserId);
+
+    const applyPresence = ({ doctorUserId, online, lastSeen } = {}) => {
+      if (!doctorUserId) return;
+
+      setDoctors((current) => {
+        const next = current.map((doc) => {
+          if (!sameDoctorUser(doc, doctorUserId)) return doc;
+          return {
+            ...doc,
+            online,
+            lastSeen: lastSeen || doc.lastSeen,
+            userId:
+              typeof doc.userId === "object"
+                ? { ...doc.userId, lastSeen: lastSeen || doc.userId?.lastSeen }
+                : doc.userId,
+          };
+        });
+
+        if (onlineOnly && online === false) {
+          return next.filter((doc) => !sameDoctorUser(doc, doctorUserId));
+        }
+
+        return next;
+      });
+
+      if (online || onlineOnly) {
+        window.setTimeout(() => load({ silent: true }), 350);
+      }
+    };
+
+    const onOnline = (payload) => applyPresence({ ...payload, online: true });
+    const onOffline = (payload) => applyPresence({ ...payload, online: false });
+
+    socket.on(EVENTS.DOCTOR_ONLINE, onOnline);
+    socket.on(EVENTS.DOCTOR_OFFLINE, onOffline);
+
+    return () => {
+      socket.off(EVENTS.DOCTOR_ONLINE, onOnline);
+      socket.off(EVENTS.DOCTOR_OFFLINE, onOffline);
+    };
+  }, [load, onlineOnly]);
+
+  useEffect(() => {
+    const refresh = window.setInterval(() => {
+      load({ silent: true });
+    }, 30000);
+    return () => window.clearInterval(refresh);
+  }, [load]);
 
   const handleConsult = async (doc) => {
     setStarting(doc._id);
@@ -172,7 +233,7 @@ export default function DoctorList() {
               <Button
                 variant={doc.online ? "ghost" : "outline"}
                 disabled={!doc.online || starting === doc._id}
-                fullWidth
+                className={styles.cardButton}
                 onClick={doc.online ? () => handleConsult(doc) : undefined}
               >
                 {starting === doc._id
@@ -182,7 +243,7 @@ export default function DoctorList() {
                     : "Unavailable"}
               </Button>
               <Button
-                fullWidth
+                className={styles.cardButton}
                 onClick={() =>
                   navigate(PAGES.APPOINTMENTS, { doctorId: doc._id })
                 }

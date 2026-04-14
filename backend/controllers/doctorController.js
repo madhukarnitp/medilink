@@ -1,5 +1,6 @@
 const Doctor = require('../models/Doctor');
 const User = require('../models/User');
+const Patient = require('../models/Patient');
 const Consultation = require('../models/Consultation');
 const Prescription = require('../models/Prescription');
 const { success, error, paginate } = require('../utils/apiResponse');
@@ -189,6 +190,98 @@ exports.getConsultations = async (req, res, next) => {
     ]);
 
     return paginate(res, consultations, total, page, limit);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /api/doctors/patients
+ * Unique patients who have consulted with the current doctor.
+ */
+exports.getPatients = async (req, res, next) => {
+  try {
+    const page = Math.max(parseInt(req.query.page, 10) || PAGINATION.DEFAULT_PAGE, 1);
+    const requestedLimit = parseInt(req.query.limit, 10) || PAGINATION.DEFAULT_LIMIT;
+    const limit = Math.min(Math.max(requestedLimit, 1), PAGINATION.MAX_LIMIT);
+    const skip = (page - 1) * limit;
+
+    const doctor = await Doctor.findOne({ userId: req.user._id }).select('_id').lean();
+    if (!doctor) return error(res, 'Doctor profile not found', 404);
+
+    const match = { doctor: doctor._id };
+    if (req.query.status) match.status = req.query.status;
+
+    const [groups, totalResult] = await Promise.all([
+      Consultation.aggregate([
+        { $match: match },
+        { $sort: { createdAt: -1 } },
+        {
+          $group: {
+            _id: '$patient',
+            totalConsultations: { $sum: 1 },
+            pendingConsultations: {
+              $sum: { $cond: [{ $eq: ['$status', CONSULTATION_STATUS.PENDING] }, 1, 0] },
+            },
+            activeConsultations: {
+              $sum: { $cond: [{ $eq: ['$status', CONSULTATION_STATUS.ACTIVE] }, 1, 0] },
+            },
+            completedConsultations: {
+              $sum: { $cond: [{ $eq: ['$status', CONSULTATION_STATUS.COMPLETED] }, 1, 0] },
+            },
+            cancelledConsultations: {
+              $sum: { $cond: [{ $eq: ['$status', CONSULTATION_STATUS.CANCELLED] }, 1, 0] },
+            },
+            lastConsultation: { $first: '$$ROOT' },
+            lastConsultationAt: { $max: '$createdAt' },
+          },
+        },
+        { $sort: { lastConsultationAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+      ]),
+      Consultation.aggregate([
+        { $match: match },
+        { $group: { _id: '$patient' } },
+        { $count: 'total' },
+      ]),
+    ]);
+
+    const patientIds = groups.map((item) => item._id).filter(Boolean);
+    const [patients, prescriptionCounts] = await Promise.all([
+      Patient.find({ _id: { $in: patientIds } })
+        .populate('userId', 'name email avatar phone lastSeen')
+        .lean({ virtuals: true }),
+      Prescription.aggregate([
+        { $match: { createdBy: doctor._id, createdFor: { $in: patientIds } } },
+        { $group: { _id: '$createdFor', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const patientById = new Map(patients.map((patient) => [patient._id.toString(), patient]));
+    const prescriptionCountByPatient = new Map(
+      prescriptionCounts.map((item) => [item._id.toString(), item.count]),
+    );
+
+    const rows = groups
+      .map((item) => {
+        const patient = patientById.get(item._id?.toString());
+        if (!patient) return null;
+        return {
+          patient,
+          totalConsultations: item.totalConsultations,
+          pendingConsultations: item.pendingConsultations,
+          activeConsultations: item.activeConsultations,
+          completedConsultations: item.completedConsultations,
+          cancelledConsultations: item.cancelledConsultations,
+          prescriptionsIssued: prescriptionCountByPatient.get(item._id.toString()) || 0,
+          lastConsultation: item.lastConsultation,
+          lastConsultationAt: item.lastConsultationAt,
+        };
+      })
+      .filter(Boolean);
+
+    return paginate(res, rows, totalResult[0]?.total || 0, page, limit);
   } catch (err) {
     next(err);
   }

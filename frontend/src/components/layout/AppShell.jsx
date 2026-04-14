@@ -7,7 +7,9 @@ export default function AppShell({ children }) {
     <div className={styles.shell}>
       <TopNavbar />
       <Sidebar />
-      <main className={styles.main}>{children}</main>
+      <main className={styles.main}>
+        <div className={styles.content}>{children}</div>
+      </main>
     </div>
   );
 }

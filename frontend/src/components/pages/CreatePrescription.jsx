@@ -27,7 +27,7 @@ const FREQUENCIES = [
 ];
 
 export default function CreatePrescription() {
-  const { navigate, showToast } = useApp();
+  const { navigate, pageParams, showToast } = useApp();
   const [step, setStep] = useState(1);
   const [patients, setPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
@@ -45,26 +45,32 @@ export default function CreatePrescription() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await doctorsApi.getConsultations({
-          status: "completed",
-          limit: 50,
-        });
+        const r = await doctorsApi.getPatients({ limit: 50 });
         const seen = new Set();
         const pts = [];
-        (r.data || []).forEach((c) => {
-          const p = c.patient;
+        (r.data || []).forEach((row) => {
+          const p = row.patient;
           if (p && !seen.has(p._id)) {
             seen.add(p._id);
             pts.push(p);
           }
         });
         setPatients(pts);
+        if (pageParams?.patientId) {
+          const match = pts.find(
+            (patient) => String(patient._id) === String(pageParams.patientId),
+          );
+          if (match) {
+            setSelectedPatient(match);
+            setSearch(match.userId?.name || "");
+          }
+        }
       } catch {
       } finally {
         setLoadingPatients(false);
       }
     })();
-  }, []);
+  }, [pageParams?.patientId]);
 
   const filtered = patients.filter(
     (p) =>
@@ -92,6 +98,7 @@ export default function CreatePrescription() {
     try {
       const payload = {
         patientId: selectedPatient._id,
+        consultationId: pageParams?.consultationId || undefined,
         diagnosis: diagnosis.trim(),
         medicines: medicines.filter((m) => m.name),
         advice: instructions || undefined,
@@ -151,7 +158,7 @@ export default function CreatePrescription() {
                 {filtered.length === 0 ? (
                   <div className={styles.noResults}>
                     {patients.length === 0
-                      ? "No patients from completed consultations found."
+                      ? "No consulted patients found yet."
                       : "No patients match your search."}
                   </div>
                 ) : (

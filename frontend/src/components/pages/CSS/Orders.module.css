@@ -1,7 +1,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--page-gap);
 }
 
 .loadingWrap {
@@ -25,11 +25,11 @@
     var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 18px;
+  padding: 14px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
 }
 
 .eyebrow {
@@ -81,8 +81,8 @@
 
 .layout {
   display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 10px;
   align-items: start;
 }
 
@@ -589,4 +589,62 @@
   .historyRight {
     align-items: flex-start;
   }
+}
+
+/* Dashboard-aligned compact sizing */
+.page {
+  gap: var(--page-gap);
+}
+
+.loadingWrap {
+  padding: 32px;
+}
+
+.hero,
+.modeBtn,
+.emptyCard,
+.medRow,
+.cartCard,
+.patientStrip,
+.trackerCard,
+.historyCard,
+.promiseGrid div,
+.statusPill {
+  border-radius: var(--radius-lg);
+}
+
+.hero,
+.emptyCard,
+.medRow,
+.cartCard,
+.patientStrip,
+.trackerCard,
+.historyCard,
+.promiseGrid div {
+  padding: var(--card-padding);
+}
+
+.sectionTop h2,
+.colTitle,
+.cartTitle,
+.greeting h1 {
+  font-size: var(--page-title-size);
+}
+
+.greeting p,
+.sectionTop p,
+.emptyText {
+  font-size: var(--page-subtitle-size);
+}
+
+.heroStats,
+.promiseGrid,
+.layout,
+.modes {
+  gap: 8px;
+}
+
+.statusPill {
+  font-size: 11px;
+  padding: 4px 9px;
 }

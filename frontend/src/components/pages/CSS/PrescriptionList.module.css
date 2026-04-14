@@ -1,7 +1,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--page-gap);
 }
 
 .loadingWrap {
@@ -62,7 +62,7 @@
 .prescriptionsList {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 .listSpacing {
@@ -259,5 +259,194 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 6px;
+  }
+}
+
+/* Compact list spacing */
+.page {
+  gap: 10px;
+}
+
+.headerTitle {
+  margin-bottom: 2px;
+}
+
+.filterBar {
+  gap: 6px;
+}
+
+.filterBtn {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.prescriptionsList {
+  gap: 10px;
+}
+
+.listSpacing {
+  margin-top: 0;
+}
+
+.cardHeader {
+  padding: 12px;
+}
+
+.diagnosis {
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+
+.meta {
+  font-size: 12px;
+}
+
+.status {
+  padding: 4px 9px;
+  font-size: 11px;
+}
+
+.cardContent {
+  padding: 12px;
+}
+
+.contentSpacing {
+  margin-bottom: 8px;
+}
+
+.labelHeading {
+  margin-bottom: 6px;
+}
+
+.medicineItems {
+  gap: 6px;
+}
+
+.medicineItem {
+  padding: 8px 10px;
+}
+
+.medicineName,
+.medicineMeta {
+  font-size: 12px;
+}
+
+.expiryRow {
+  margin-top: 8px;
+}
+
+.instructions {
+  margin: 0 12px 10px;
+  padding: 9px 10px;
+  font-size: 12px;
+}
+
+.actions {
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 8px 12px 12px;
+}
+
+.actions button {
+  padding: 7px 12px;
+  width: auto;
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 0;
+  }
+
+  .header {
+    gap: 8px;
+  }
+
+  .cardHeader {
+    gap: 8px;
+  }
+
+  .medicineItem {
+    gap: 4px;
+  }
+
+  .actions {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .actions button {
+    width: auto;
+  }
+}
+
+/* Dashboard-aligned compact sizing */
+.page {
+  gap: var(--page-gap);
+  padding: 0;
+}
+
+.loadingWrap {
+  padding: 32px;
+}
+
+.headerTitle,
+.greeting h1 {
+  font-size: var(--page-title-size);
+}
+
+.headerSubtitle,
+.greeting p {
+  font-size: var(--page-subtitle-size);
+}
+
+.card,
+.empty,
+.status,
+.medicineItem,
+.instructions {
+  border-radius: var(--radius-lg);
+}
+
+.cardHeader,
+.cardContent,
+.medicineItem,
+.instructions {
+  padding: var(--card-padding);
+}
+
+.empty {
+  min-height: 220px;
+  padding: 24px;
+}
+
+.title,
+.diagnosis {
+  font-size: 15px;
+}
+
+.status {
+  font-size: 11px;
+  padding: 4px 9px;
+}
+
+/* Keep action buttons compact instead of stretching across cards. */
+.actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.actions button {
+  flex: 0 1 auto;
+  max-width: 220px;
+  min-width: 96px;
+  width: auto;
+}
+
+@media (max-width: 768px) {
+  .actions button {
+    max-width: 100%;
+    width: auto;
   }
 }

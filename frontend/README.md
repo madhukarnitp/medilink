@@ -4,12 +4,16 @@ React + Vite client for the MediLink telemedicine app. The frontend talks to the
 
 ## Local Setup
 
-Start the backend first:
+Start the backend and realtime server first:
 
 ```bash
 cd ../backend
 npm install
 npm run seed
+npm run dev
+
+cd ../realtime-server
+npm install
 npm run dev
 ```
 
@@ -27,9 +31,10 @@ Default URLs:
 | --- | --- |
 | Frontend | `http://localhost:3000` |
 | Backend API | `http://localhost:5001/api` |
+| Realtime Socket.io | `http://localhost:5002` |
 | Swagger UI | `http://localhost:5001/api-docs` |
 
-The Vite config proxies `/api` and `/socket.io` to `http://localhost:5001`, so local browser requests can use same-origin paths during development.
+The Vite config proxies `/api` to `http://localhost:5001` and `/socket.io` to `http://localhost:5002`, so local browser requests can use same-origin paths during development.
 
 ## Environment Variables
 
@@ -37,10 +42,10 @@ Optional `frontend/.env` values:
 
 ```env
 VITE_API_URL=http://localhost:5001/api
-VITE_SOCKET_URL=http://localhost:5001
+VITE_REALTIME_URL=http://localhost:5002
 ```
 
-If omitted, `src/services/api.js` defaults to `http://localhost:5001/api`, and `src/services/socket.js` uses the Vite dev origin in development.
+If omitted, `src/services/api.js` defaults to `http://localhost:5001/api`, and `src/services/socket.js` uses `http://localhost:5002` in development.
 
 ## Demo Accounts
 
@@ -106,7 +111,7 @@ Important events handled by the client include `receiveMessage`, `typing`, `stop
 
 ## Video Call Testing
 
-1. Run backend and frontend.
+1. Run backend, realtime server, and frontend.
 2. Log in as a patient in one browser.
 3. Log in as a doctor in another browser or incognito window.
 4. Start or accept a consultation.

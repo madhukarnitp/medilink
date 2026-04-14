@@ -1,7 +1,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--page-gap);
 }
 
 .loadingWrap {
@@ -58,8 +58,8 @@
 
 .layout {
   display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 10px;
   align-items: start;
 }
 
@@ -77,8 +77,8 @@
 .recordsList {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .emptyText {
@@ -89,7 +89,7 @@
 .recordCard {
   border: 1px solid #E2E8F0;
   border-radius: 12px;
-  padding: 20px;
+  padding: 12px;
   background-color: #fff;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
 }
@@ -525,4 +525,68 @@
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* Dashboard-aligned compact sizing */
+.page {
+  gap: var(--page-gap);
+}
+
+.loadingWrap {
+  padding: 32px;
+}
+
+.greeting h1,
+.headerTitle,
+.recordTitle {
+  font-size: var(--page-title-size);
+}
+
+.greeting p,
+.headerSubtitle,
+.recordMeta {
+  font-size: var(--page-subtitle-size);
+}
+
+.layout,
+.recordsList,
+.summaryGrid,
+.healthSidebar {
+  gap: 8px;
+}
+
+.recordCard,
+.summaryCard,
+.healthSidebar,
+.sectionContent,
+.recordHeader,
+.itemRow,
+.resultRow,
+.empty {
+  border-radius: var(--radius-lg);
+}
+
+.recordCard,
+.summaryCard,
+.healthSidebar,
+.sectionContent,
+.empty {
+  padding: var(--card-padding);
+}
+
+.empty {
+  min-height: 220px;
+}
+
+.recordBadge,
+.filterBtn,
+.status {
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  padding: 4px 9px;
+}
+
+.summaryTitle,
+.sidebarHeader h3 {
+  font-size: var(--section-title-size);
 }

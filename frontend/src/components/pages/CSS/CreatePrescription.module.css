@@ -668,7 +668,7 @@
 
 /* Professional, dashboard-aligned overrides */
 .page {
-  gap: 20px;
+  gap: var(--page-gap-lg);
   max-width: none;
   margin: 0;
   padding: 0;
@@ -676,7 +676,7 @@
 
 .header {
   align-items: flex-start;
-  gap: 20px;
+  gap: 12px;
   padding-bottom: 0;
   border-bottom: 0;
 }
@@ -759,8 +759,8 @@
 }
 
 .stepContent {
-  gap: 18px;
-  padding: 20px;
+  gap: 12px;
+  padding: 14px;
 }
 
 .stepContent h2 {
@@ -810,9 +810,9 @@
 }
 
 .patientList {
-  gap: 10px;
+  gap: 8px;
   padding: 0;
-  max-height: 440px;
+  max-height: 520px;
 }
 
 .noResults {
@@ -823,7 +823,7 @@
 
 .patientCard {
   border-width: 1px;
-  padding: 14px 16px;
+  padding: 10px 12px;
   overflow: visible;
   transform: none;
 }
@@ -888,8 +888,8 @@
 }
 
 .medicinesSection {
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 12px;
   background: var(--surface);
   box-shadow: none;
 }
@@ -952,7 +952,7 @@
 
 .followUpBox,
 .reviewBox {
-  padding: 14px 16px;
+  padding: 12px;
   background: var(--surface);
   box-shadow: none;
 }
@@ -968,7 +968,7 @@
 }
 
 .reviewBox {
-  gap: 14px;
+  gap: 10px;
 }
 
 .reviewSection h3 {
@@ -982,8 +982,8 @@
 }
 
 .reviewMedicine {
-  gap: 12px;
-  padding: 10px 0;
+  gap: 8px;
+  padding: 8px 0;
 }
 
 .reviewMedicine strong {
@@ -995,7 +995,7 @@
 }
 
 .actions {
-  gap: 12px;
+  gap: 8px;
 }
 
 .actions button {
@@ -1065,5 +1065,92 @@
 
   .followUpInput {
     max-width: none;
+  }
+}
+
+/* Dashboard-aligned compact sizing */
+.page {
+  gap: var(--page-gap);
+  padding: 0;
+}
+
+.loadingWrap,
+.emptyState {
+  padding: 32px;
+}
+
+.header {
+  gap: 12px;
+}
+
+.title,
+.headerTitle,
+.stepTitle {
+  font-size: var(--page-title-size);
+}
+
+.subtitle,
+.headerSubtitle,
+.stepSubtitle {
+  font-size: var(--page-subtitle-size);
+}
+
+.stepContent,
+.formCard,
+.reviewBox,
+.followUpBox,
+.medicineRow,
+.sectionHeader,
+.emptyState {
+  border-radius: var(--radius-lg);
+}
+
+.stepContent,
+.formCard,
+.reviewBox,
+.followUpBox,
+.sectionHeader {
+  padding: var(--card-padding);
+}
+
+.input,
+.inputFull,
+.inputSmall,
+.inputSelect,
+.textarea,
+.followUpInput {
+  min-height: var(--control-height);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+
+.step,
+.removeBtn,
+.actions button {
+  border-radius: var(--radius-md);
+}
+
+.actions button {
+  min-height: var(--control-height);
+  font-size: var(--control-font-size);
+}
+
+/* Keep action buttons compact instead of stretching across wide panels. */
+.actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.actions button {
+  flex: 0 1 auto;
+  max-width: 220px;
+  min-width: 104px;
+  width: auto;
+}
+
+@media (max-width: 640px) {
+  .actions button {
+    max-width: 100%;
+    width: auto;
   }
 }

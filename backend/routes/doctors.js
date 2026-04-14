@@ -9,6 +9,7 @@ const {
   updateProfile,
   updateOnlineStatus,
   getConsultations,
+  getPatients,
   getDashboard,
   addReview,
 } = require('../controllers/doctorController');
@@ -42,6 +43,7 @@ router.get('/profile', protect, authorize(ROLES.DOCTOR), getOwnProfile);
 router.put('/profile', protect, authorize(ROLES.DOCTOR), handleAvatarUpload, updateProfileRules, validate, updateProfile);
 router.put('/status', protect, authorize(ROLES.DOCTOR), updateOnlineStatus);
 router.get('/consultations', protect, authorize(ROLES.DOCTOR), getConsultations);
+router.get('/patients', protect, authorize(ROLES.DOCTOR), getPatients);
 router.get('/dashboard', protect, authorize(ROLES.DOCTOR), getDashboard);
 
 // ── Public — must come after /profile /status etc. ───────────────────────────

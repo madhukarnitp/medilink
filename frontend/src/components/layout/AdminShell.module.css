@@ -256,11 +256,18 @@
 .main {
   flex: 1;
   min-width: 0;
-  padding: 18px;
+  padding: 14px;
+}
+
+.content {
+  width: min(100%, var(--main-content-max));
+  min-height: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .mainExpanded {
-  padding-left: 16px;
+  padding-left: 12px;
 }
 
 .collapsed .navCopy,
@@ -334,14 +341,14 @@
 
   .main,
   .mainExpanded {
-    padding: 16px;
+    padding: 12px;
   }
 }
 
 @media (max-width: 560px) {
   .main,
   .mainExpanded {
-    padding: 12px;
+    padding: 10px;
   }
 
   .mobileMenuButton {

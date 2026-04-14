@@ -4,12 +4,14 @@
   "version": "1.0.0",
   "description": "MediLink full stack app",
   "scripts": {
-    "postinstall": "npm install --prefix backend",
-    "install-all": "npm install && npm install --prefix backend && npm install --prefix frontend",
-    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "postinstall": "cd backend && npm install && cd ../realtime-server && npm install",
+    "install-all": "npm install && cd frontend && npm install",
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix realtime-server\" \"npm run dev --prefix frontend\"",
     "backend": "npm run dev --prefix backend",
+    "realtime": "npm run dev --prefix realtime-server",
     "frontend": "npm run dev --prefix frontend",
     "start": "npm start --prefix backend",
+    "start:realtime": "npm start --prefix realtime-server",
     "build": "npm run build --prefix backend || echo 'Backend build skipped'"
   },
   "devDependencies": {

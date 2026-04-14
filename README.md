@@ -2,7 +2,7 @@
 
 MediLink is a full-stack telemedicine app for patients, doctors, and admins. It includes doctor discovery, real-time consultations, WebRTC video signaling, chat, e-prescriptions, medicine orders, patient health records, profile uploads, and admin user/order management.
 
-The repository is split into an Express/MongoDB backend and a React/Vite frontend.
+The repository is split into an Express/MongoDB API backend, a dedicated Socket.io realtime server, and a React/Vite frontend.
 
 ## What is Included
 
@@ -10,7 +10,7 @@ The repository is split into an Express/MongoDB backend and a React/Vite fronten
 - Doctor search, specialty filters, online status, dashboards, and reviews
 - Patient dashboard, profile, prescriptions, consultations, and health data
 - Consultation lifecycle with pending, active, completed, cancelled states
-- Socket.io chat, typing indicators, presence, and WebRTC signaling events
+- Dedicated Socket.io realtime server for chat, typing indicators, presence, call events, and WebRTC signaling
 - E-prescription creation, status updates, and cancellation
 - Medicine order creation, cancellation, and admin fulfillment controls
 - Cloudinary-backed avatar and document uploads
@@ -23,7 +23,8 @@ The repository is split into an Express/MongoDB backend and a React/Vite fronten
 | Area | Tools |
 | --- | --- |
 | Frontend | React 18, Vite, CSS Modules, Socket.io client |
-| Backend | Node.js, Express, Socket.io, Helmet, CORS, rate limiting |
+| Backend API | Node.js, Express, Helmet, CORS, rate limiting |
+| Realtime | Node.js, Socket.io, JWT-authenticated sockets, WebRTC signaling |
 | Database | MongoDB, Mongoose |
 | Auth | JWT, bcryptjs, role guards |
 | Uploads | Multer, Cloudinary |
@@ -72,9 +73,6 @@ byteverse_medilink/
 |   |   |-- orders.js                           # /api/orders routes
 |   |   |-- patients.js                         # /api/patients routes
 |   |   `-- prescriptions.js                    # /api/prescriptions routes
-|   |-- socket/
-|   |   |-- handlers.js                         # Socket.io auth, rooms, chat, WebRTC signaling
-|   |   `-- ioInstance.js                       # Shared Socket.io instance setter/getter
 |   |-- tests/
 |   |   |-- admin.test.js                       # Admin API integration tests
 |   |   |-- auth.test.js                        # Authentication integration tests
@@ -92,7 +90,20 @@ byteverse_medilink/
 |   |-- package-lock.json                     # Backend npm lockfile
 |   |-- package.json                          # Backend dependencies, scripts, Jest config
 |   |-- seeder.js                             # Database clean/seed CLI
-|   `-- server.js                             # Express app, middleware, routes, Swagger, Socket.io
+|   `-- server.js                             # Express app, middleware, routes, Swagger
+|-- realtime-server/
+|   |-- config/
+|   |   `-- database.js                         # MongoDB connection for realtime validation/persistence
+|   |-- models/                                # Minimal shared MongoDB models used by realtime
+|   |-- socket/
+|   |   |-- handlers.js                         # Socket auth, rooms, chat, presence, WebRTC signaling
+|   |   `-- ioInstance.js                       # Socket.io instance holder for internal bridge emits
+|   |-- utils/
+|   |   |-- constants.js                        # Realtime event/status constants
+|   |   `-- notifications.js                   # Notification persistence helper
+|   |-- package.json                           # Realtime server scripts and dependencies
+|   |-- README.md                              # Realtime service notes
+|   `-- server.js                              # Socket.io server, health check, internal emit bridge
 |-- frontend/
 |   |-- public/
 |   |   |-- notification.wav                   # General notification sound asset
@@ -232,6 +243,9 @@ JWT_EXPIRE=7d
 JWT_REFRESH_EXPIRE=30d
 ALLOWED_ORIGINS=http://localhost:3000
 CLIENT_URL=http://localhost:3000
+REALTIME_PORT=5002
+REALTIME_SERVER_URL=http://localhost:5002
+REALTIME_INTERNAL_SECRET=replace-with-a-long-random-shared-secret
 
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
@@ -269,7 +283,7 @@ The seed file creates patient and doctor users. Admin APIs exist, but an admin a
 
 ### 4. Run the app
 
-Run both apps from the root:
+Run all three services from the root:
 
 ```bash
 npm run dev
@@ -279,6 +293,7 @@ Or run them separately:
 
 ```bash
 npm run dev --prefix backend
+npm run dev --prefix realtime-server
 npm run dev --prefix frontend
 ```
 
@@ -288,11 +303,15 @@ Default local URLs:
 | --- | --- |
 | Frontend | `http://localhost:3000` |
 | Backend API | `http://localhost:5001/api` |
+| Realtime Socket.io | `http://localhost:5002` |
 | Health check | `http://localhost:5001/api/health` |
+| Realtime health check | `http://localhost:5002/health` |
 | Swagger UI | `http://localhost:5001/api-docs` |
 | OpenAPI JSON | `http://localhost:5001/api-docs.json` |
 
-The Vite dev server proxies `/api` and `/socket.io` to `http://localhost:5001`.
+The Vite dev server proxies `/api` to `http://localhost:5001` and `/socket.io` to `http://localhost:5002`. The frontend uses `VITE_REALTIME_URL` for deployed realtime URLs such as `https://rt.yourapp.com`.
+
+For separate hosting, deploy `realtime-server/` as its own Node app. Set `MONGODB_URI`, `JWT_SECRET`, `ALLOWED_ORIGINS`, and `REALTIME_INTERNAL_SECRET` on that realtime host. Then set `REALTIME_SERVER_URL=https://your-realtime-domain.com` on the API backend and `VITE_REALTIME_URL=https://your-realtime-domain.com` on the frontend.
 
 ## API Documentation
 
@@ -325,7 +344,7 @@ Socket connections require a JWT:
 ```js
 import { io } from 'socket.io-client';
 
-const socket = io('http://localhost:5001', {
+const socket = io('http://localhost:5002', {
   path: '/socket.io',
   auth: { token },
 });
@@ -355,11 +374,13 @@ Root scripts:
 
 | Command | Description |
 | --- | --- |
-| `npm run install-all` | Install root, backend, and frontend dependencies |
-| `npm run dev` | Run backend and frontend together |
+| `npm run install-all` | Install root, backend, realtime, and frontend dependencies |
+| `npm run dev` | Run backend API, realtime server, and frontend together |
 | `npm run backend` | Run backend dev server |
+| `npm run realtime` | Run realtime Socket.io dev server |
 | `npm run frontend` | Run frontend dev server |
 | `npm start` | Start backend in production mode |
+| `npm run start:realtime` | Start realtime server in production mode |
 | `npm run build` | Run backend build placeholder |
 
 Backend scripts:
@@ -380,6 +401,14 @@ Frontend scripts:
 | `npm run dev --prefix frontend` | Start Vite on port 3000 |
 | `npm run build --prefix frontend` | Build production frontend |
 | `npm run preview --prefix frontend` | Preview the production build |
+
+Realtime scripts:
+
+| Command | Description |
+| --- | --- |
+| `npm run dev --prefix realtime-server` | Start the Socket.io realtime server with Node watch mode |
+| `npm start --prefix realtime-server` | Start the realtime server with Node |
+| `npm run build --prefix realtime-server` | Syntax-check the realtime server entry |
 
 ## Docker
 
@@ -417,6 +446,8 @@ The tests use `MONGODB_URI_TEST` when provided, otherwise `mongodb://localhost:2
 ## Notes
 
 - Backend defaults to port `5001`; Docker defaults the container to `5000`.
-- Frontend defaults to port `3000` and proxies API/socket traffic to the backend.
+- Frontend defaults to port `3000` and proxies API traffic to the backend and socket traffic to the realtime server.
+- Backend does not run Socket.io; socket traffic belongs to the dedicated realtime server.
+- The realtime server verifies the same JWT secret as the backend and can query the same MongoDB to validate consultation room access.
 - Swagger is generated from `backend/config/swagger.js` and mounted in `backend/server.js`.
 - The raw OpenAPI document can be imported into Postman, Insomnia, or other API clients.

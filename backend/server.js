@@ -2,7 +2,6 @@ require('dotenv').config();
 
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -11,7 +10,6 @@ const mongoSanitize = require('express-mongo-sanitize');
 
 const { closeDatabase, connectDatabase, getDatabaseStatus } = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
-const { registerSocketHandlers } = require('./socket/handlers');
 const { swaggerUi, swaggerSpec, swaggerUiOptions } = require('./config/swagger');
 const Prescription = require('./models/Prescription');
 const { createPrescriptionVerificationToken } = require('./utils/prescriptionVerification');
@@ -31,8 +29,10 @@ const orderRoutes = require('./routes/orders');
 const adminRoutes = require('./routes/admin');
 const notificationRoutes = require('./routes/notifications');
 const appointmentRoutes = require('./routes/appointments');
+const vitalsRoutes = require('./routes/vitals');
+const reportsRoutes = require('./routes/reports');
 
-// ── Socket.io helpers ─────────────────────────────────────────────────────────
+// ── CORS helpers ──────────────────────────────────────────────────────────────
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
   .split(',')
   .map((origin) => origin.trim())
@@ -40,25 +40,6 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
 
 const initializeServer = () => {
   server = http.createServer(app);
-
-  const io = new Server(server, {
-    cors: {
-      origin: allowedOrigins,
-      methods: ['GET', 'POST'],
-      credentials: true,
-    },
-    // Performance optimizations
-    pingTimeout: 30000,        // Reduce from 60s to 30s
-    pingInterval: 25000,       // Reduce ping frequency
-    maxHttpBufferSize: 1e6,    // Limit message size (1MB)
-    allowEIO3: false,          // Disable old protocol
-    transports: ['websocket', 'polling'], // Prefer websocket
-    connectTimeout: 10000,     // Faster connection timeout
-  });
-
-  registerSocketHandlers(io);
-  require('./socket/ioInstance').set(io);
-
   return server;
 };
 
@@ -142,6 +123,8 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/appointments', appointmentRoutes);
+app.use('/api/vitals', vitalsRoutes);
+app.use('/api/reports', reportsRoutes);
 
 const redirectToPrescriptionVerification = async (req, res, next) => {
   try {
@@ -212,6 +195,7 @@ if (require.main === module) {
       console.log(`[server] Local API: http://localhost:${PORT}/api`);
       console.log(`[server] Health check: http://localhost:${PORT}/api/health`);
       console.log(`[server] API docs: http://localhost:${PORT}/api-docs`);
+      console.log('[server] Socket.IO is handled by the separate realtime server');
     });
   });
 }

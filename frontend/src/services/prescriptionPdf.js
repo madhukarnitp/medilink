@@ -144,22 +144,27 @@ export const generatePrescriptionPdf = async ({
   doc.text("Digital prescription", margin + 18, 22.5);
   doc.text("Verified medical document", margin + 18, 27.2);
 
+  const headerQrSize = 18;
+  const headerQrX = right - headerQrSize - 4;
+  const headerTextX = headerQrX - 62;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15.5);
+  doc.setFontSize(14);
   doc.setTextColor(22, 44, 55);
-  doc.text("PRESCRIPTION", right - 29, 17);
+  doc.text("PRESCRIPTION", headerTextX, 17);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.2);
   doc.setTextColor(81, 101, 112);
-  doc.text(`ID: ${rxDisplayId}`, right - 29, 23);
-  doc.text(`Issued: ${issuedDate}`, right - 29, 28);
-  doc.text(`Expires: ${expiresDate}`, right - 29, 33);
+  doc.text(`ID: ${rxDisplayId}`, headerTextX, 23, { maxWidth: 56 });
+  doc.text(`Issued: ${issuedDate}`, headerTextX, 28);
+  doc.text(`Expires: ${expiresDate}`, headerTextX, 33);
 
-  doc.addImage(pdfQrCodeUrl, "PNG", right - 23, 13, 18, 18);
+  doc.addImage(pdfQrCodeUrl, "PNG", headerQrX, 13, headerQrSize, headerQrSize);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.8);
   doc.setTextColor(17, 77, 110);
-  doc.text("Scan to verify", right - 14, 34.8, { align: "center" });
+  doc.text("Scan to verify", headerQrX + headerQrSize / 2, 34.8, {
+    align: "center",
+  });
 
   y = 52;
   drawSectionTitle("Patient and Doctor");

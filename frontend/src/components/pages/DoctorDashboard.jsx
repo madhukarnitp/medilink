@@ -111,6 +111,16 @@ export default function DoctorDashboard() {
           </button>
           <button
             className={styles.actionCard}
+            onClick={() => navigate(PAGES.DOCTOR_PATIENTS)}
+          >
+            <span className={styles.actionIcon}>👥</span>
+            <div className={styles.actionText}>
+              <div className={styles.actionTitle}>My Patients</div>
+              <div className={styles.actionDesc}>See old consulted patients</div>
+            </div>
+          </button>
+          <button
+            className={styles.actionCard}
             onClick={() => navigate(PAGES.DOCTOR_PRESCRIPTIONS)}
           >
             <span className={styles.actionIcon}>📋</span>
@@ -129,6 +139,18 @@ export default function DoctorDashboard() {
             <div className={styles.actionText}>
               <div className={styles.actionTitle}>Consultations</div>
               <div className={styles.actionDesc}>View active consultations</div>
+            </div>
+          </button>
+          <button
+            className={styles.actionCard}
+            onClick={() => navigate(PAGES.CONSULTATION_LIST)}
+          >
+            <span className={styles.actionIcon}>🗂</span>
+            <div className={styles.actionText}>
+              <div className={styles.actionTitle}>Consultation Records</div>
+              <div className={styles.actionDesc}>
+                Review patient history
+              </div>
             </div>
           </button>
         </div>
@@ -156,9 +178,13 @@ export default function DoctorDashboard() {
                 </div>
                 <button
                   className={styles.viewLink}
-                  onClick={() =>
-                    navigate(PAGES.CONSULTATION, { consultationId: c._id })
-                  }
+                  onClick={() => {
+                    const targetPage =
+                      c.status === "active" || c.status === "pending"
+                        ? PAGES.CONSULTATION
+                        : PAGES.CONSULTATION_LIST;
+                    navigate(targetPage, { consultationId: c._id });
+                  }}
                 >
                   View →
                 </button>

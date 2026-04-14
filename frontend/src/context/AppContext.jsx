@@ -41,8 +41,11 @@ export const PAGES = {
   SOS: "sos",
   PROFILE: "profile",
   DOCTOR_DASHBOARD: "doctor_dashboard",
+  DOCTOR_PATIENTS: "doctor_patients",
   CREATE_PRESCRIPTION: "create_prescription",
   DOCTOR_PRESCRIPTIONS: "doctor_prescriptions",
+  PATIENT_VITALS: "patient_vitals",
+  PATIENT_REPORTS: "patient_reports",
   ADMIN_DASHBOARD: "admin_dashboard",
   ADMIN_USERS: "admin_users",
   ADMIN_DOCTORS: "admin_doctors",
@@ -51,7 +54,7 @@ export const PAGES = {
   NOT_FOUND: "not_found",
 };
 
-const getHomePage = (role) => {
+export const getHomePage = (role) => {
   if (role === "admin") return PAGES.ADMIN_DASHBOARD;
   if (role === "doctor") return PAGES.DOCTOR_DASHBOARD;
   return PAGES.DASHBOARD;
@@ -68,8 +71,11 @@ const PAGE_PATHS = {
   [PAGES.SOS]: "/sos",
   [PAGES.PROFILE]: "/profile",
   [PAGES.DOCTOR_DASHBOARD]: "/doctor/dashboard",
+  [PAGES.DOCTOR_PATIENTS]: "/doctor/patients",
   [PAGES.CREATE_PRESCRIPTION]: "/doctor/prescriptions/new",
   [PAGES.DOCTOR_PRESCRIPTIONS]: "/doctor/prescriptions",
+  [PAGES.PATIENT_VITALS]: "/doctor/patients",
+  [PAGES.PATIENT_REPORTS]: "/doctor/patients",
   [PAGES.ADMIN_DASHBOARD]: "/admin",
   [PAGES.ADMIN_USERS]: "/admin/users",
   [PAGES.ADMIN_DOCTORS]: "/admin/doctors",
@@ -96,6 +102,21 @@ const getPathForPage = (page, params = {}) => {
     const mode = params.mode === "call" ? "/call" : "";
     return `/consultation/${encodeURIComponent(params.consultationId)}${mode}`;
   }
+  if (page === PAGES.PATIENT_VITALS && params.patientId) {
+    return `/doctor/patients/${encodeURIComponent(params.patientId)}/vitals`;
+  }
+  if (page === PAGES.PATIENT_REPORTS && params.patientId) {
+    return `/doctor/patients/${encodeURIComponent(params.patientId)}/reports`;
+  }
+  if (page === PAGES.CREATE_PRESCRIPTION && params.patientId) {
+    const query = new URLSearchParams({
+      patientId: String(params.patientId),
+    });
+    if (params.consultationId) {
+      query.set("consultationId", String(params.consultationId));
+    }
+    return `/doctor/prescriptions/new?${query.toString()}`;
+  }
   const basePath = PAGE_PATHS[page] || PAGE_PATHS[PAGES.NOT_FOUND];
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -105,6 +126,10 @@ const getPathForPage = (page, params = {}) => {
   const queryString = query.toString();
   return queryString ? `${basePath}?${queryString}` : basePath;
 };
+
+const shouldSyncUrl = (page, params = {}, options = {}) =>
+  Boolean(options.updateUrl) ||
+  (page === PAGES.PRESCRIPTION_VERIFY && Boolean(params.prescriptionId));
 
 const getDeepLinkTarget = () => {
   if (typeof window === "undefined") return null;
@@ -170,7 +195,9 @@ const getDeepLinkTarget = () => {
   if (parts[0] === "dashboard") return { page: PAGES.DASHBOARD };
   if (parts[0] === "doctors") return { page: PAGES.DOCTORS, params: queryParams };
   if (parts[0] === "consultation") return { page: PAGES.CONSULTATION };
-  if (parts[0] === "consultations") return { page: PAGES.CONSULTATION_LIST };
+  if (parts[0] === "consultations") {
+    return { page: PAGES.CONSULTATION_LIST, params: queryParams };
+  }
   if (parts[0] === "appointments") {
     return { page: PAGES.APPOINTMENTS, params: queryParams };
   }
@@ -189,8 +216,21 @@ const getDeepLinkTarget = () => {
   if (parts[0] === "doctor" && parts[1] === "dashboard") {
     return { page: PAGES.DOCTOR_DASHBOARD };
   }
+  if (parts[0] === "doctor" && parts[1] === "patients" && parts[2]) {
+    const patientId = decodeURIComponent(parts[2]);
+    if (parts[3] === "vitals") {
+      return { page: PAGES.PATIENT_VITALS, params: { patientId } };
+    }
+    if (parts[3] === "reports") {
+      return { page: PAGES.PATIENT_REPORTS, params: { patientId } };
+    }
+    return { page: PAGES.DOCTOR_PATIENTS, params: { patientId } };
+  }
+  if (parts[0] === "doctor" && parts[1] === "patients") {
+    return { page: PAGES.DOCTOR_PATIENTS };
+  }
   if (parts[0] === "doctor" && parts[1] === "prescriptions" && parts[2] === "new") {
-    return { page: PAGES.CREATE_PRESCRIPTION };
+    return { page: PAGES.CREATE_PRESCRIPTION, params: queryParams };
   }
   if (parts[0] === "doctor" && parts[1] === "prescriptions") {
     return { page: PAGES.DOCTOR_PRESCRIPTIONS };
@@ -471,11 +511,11 @@ export function AppProvider({ children }) {
       if (!error) return;
       const message = String(error.message || error);
       if (message.toLowerCase().includes("unauthorized")) {
-        showToast("Session expired. Please log in again.", "error");
-        clearTokens();
-        setIsAuthenticated(false);
-        setUser(null);
         disconnectSocket();
+        showToast(
+          "Realtime connection failed. Please check realtime server JWT settings.",
+          "warning",
+        );
       }
     },
     [showToast],
@@ -503,7 +543,7 @@ export function AppProvider({ children }) {
       setUser(data.user);
       setIsAuthenticated(true);
       applyNavigationTarget(nextPage, nextParams);
-      routerNavigate(getPathForPage(nextPage, nextParams), { replace: true });
+      routerNavigate("/", { replace: true });
       pendingDeepLinkRef.current = null;
       loadNotifications();
       showToast(`Welcome back, ${data.user.name.split(" ")[0]}!`);
@@ -533,8 +573,14 @@ export function AppProvider({ children }) {
 
   const navigate = useCallback(
     (page, params = {}, options = {}) => {
+      if (typeof page === "number") {
+        routerNavigate(page);
+        return;
+      }
       pendingDeepLinkRef.current = null;
       applyNavigationTarget(page, params);
+      if (!shouldSyncUrl(page, params, options)) return;
+
       const nextPath = getPathForPage(page, params);
       if (nextPath && `${location.pathname}${location.search}` !== nextPath) {
         routerNavigate(nextPath, { replace: Boolean(options.replace) });

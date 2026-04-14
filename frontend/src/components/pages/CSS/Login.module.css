@@ -371,3 +371,78 @@
   border-color: #007BFF;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
+
+/* Dashboard-aligned compact sizing */
+.card {
+  border-radius: var(--radius-lg);
+  padding: 28px;
+}
+
+.header {
+  margin-bottom: 18px;
+}
+
+.logo {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.logoImage {
+  height: 64px;
+  width: 78px;
+}
+
+.header h1 {
+  font-size: var(--page-title-size);
+}
+
+.header p {
+  font-size: var(--page-subtitle-size);
+}
+
+.form {
+  gap: 14px;
+}
+
+.roleSelector,
+.demoButtons {
+  gap: 8px;
+}
+
+.roleOption,
+.inputGroup input,
+.inputGroup select,
+.loginBtn,
+.demoBtn,
+.tabRow,
+.tabBtn,
+.credList > div,
+.error,
+.notice {
+  border-radius: var(--radius-md);
+}
+
+.roleOption,
+.inputGroup input,
+.inputGroup select,
+.loginBtn,
+.demoBtn {
+  min-height: var(--control-height);
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+.footer {
+  margin-top: 18px;
+  padding-top: 14px;
+}
+
+@media (max-width: 600px) {
+  .card {
+    padding: 18px;
+  }
+
+  .logo {
+    font-size: 22px;
+  }
+}

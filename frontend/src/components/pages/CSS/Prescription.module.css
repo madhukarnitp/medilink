@@ -1506,3 +1506,477 @@
     page-break-inside: avoid;
   }
 }
+
+@media (max-width: 620px) {
+  .page {
+    gap: 10px;
+  }
+
+  .detailPage {
+    padding-bottom: 10px;
+  }
+
+  .publicSuccessPage {
+    padding: 10px;
+  }
+
+  .greeting {
+    gap: 8px;
+    padding: 0;
+  }
+
+  .greeting h1 {
+    font-size: 21px;
+  }
+
+  .greeting p {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .headerChips {
+    gap: 5px;
+  }
+
+  .headerChip {
+    min-height: 25px;
+    padding-inline: 8px;
+    font-size: 10px;
+  }
+
+  .card {
+    border-radius: 13px;
+  }
+
+  .rxHeader {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .rxLogoImage {
+    width: 30px;
+    height: 30px;
+  }
+
+  .rxLogo {
+    font-size: 20px;
+  }
+
+  .rxDate {
+    width: 100%;
+    grid-template-columns: 1fr 1fr;
+    min-width: 0;
+  }
+
+  .rxDateGroup {
+    text-align: left;
+  }
+
+  .qrSection {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 10px;
+    align-items: center;
+  }
+
+  .qrCode {
+    grid-row: span 2;
+    width: 64px;
+    height: 64px;
+  }
+
+  .qrLabel,
+  .qrId {
+    text-align: left;
+  }
+
+  .statusBadge {
+    width: max-content;
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+
+  .successBanner,
+  .warningBanner,
+  .party,
+  .validityBox,
+  .tableWrap,
+  .actions {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .parties,
+  .validityBox {
+    gap: 0;
+  }
+
+  .partyName {
+    font-size: 15px;
+  }
+
+  .validityBox {
+    grid-template-columns: 1fr;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .validityItem {
+    min-height: 0;
+    padding: 9px 10px;
+  }
+
+  .tableWrap {
+    overflow-x: visible;
+  }
+
+  .diagnosis {
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+
+  .table {
+    min-width: 0;
+    border: none;
+    border-radius: 0;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table tr {
+    margin-bottom: 10px;
+    border: 1px solid var(--rx-line);
+    border-radius: 12px;
+    overflow: hidden;
+    background: #ffffff;
+  }
+
+  .table td {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 10px;
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--rx-line);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .table td:last-child {
+    border-bottom: 0;
+  }
+
+  .table td::before {
+    color: var(--rx-soft-ink);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .table td:nth-child(1)::before {
+    content: "Medicine";
+  }
+
+  .table td:nth-child(2)::before {
+    content: "Dosage";
+  }
+
+  .table td:nth-child(3)::before {
+    content: "Frequency";
+  }
+
+  .table td:nth-child(4)::before {
+    content: "Duration";
+  }
+
+  .table td:nth-child(5)::before {
+    content: "Instructions";
+  }
+
+  .instructionsText,
+  .notesText {
+    font-size: 12px;
+  }
+
+  .actions {
+    gap: 8px;
+    padding-top: 10px;
+    padding-bottom: 12px;
+  }
+
+  .actions button {
+    width: 100%;
+    flex-basis: auto;
+    min-height: 40px;
+  }
+}
+
+/* Hard mobile guard against QR/text overlap on the on-screen prescription. */
+@media (max-width: 620px) {
+  .publicSuccessPage {
+    padding: 8px;
+  }
+
+  .greeting {
+    display: grid;
+    grid-template-columns: 1fr;
+    min-width: 0;
+  }
+
+  .greeting > div,
+  .publicHeroContent,
+  .publicHeroMeta,
+  .rxHeader > *,
+  .rxBrand,
+  .rxDate,
+  .qrSection,
+  .statusBadge {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .headerChips {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .headerChip {
+    justify-content: center;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .headerChip:last-child {
+    display: none;
+  }
+
+  .publicHero {
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow: hidden;
+  }
+
+  .publicHeroContent h1,
+  .publicHeroContent p,
+  .publicHeroMeta strong,
+  .verifyReason strong {
+    overflow-wrap: anywhere;
+  }
+
+  .card {
+    overflow: hidden;
+  }
+
+  .rxHeader {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    justify-items: stretch;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .rxBrand {
+    align-items: flex-start;
+  }
+
+  .rxLogo,
+  .rxBrandSub,
+  .rxId,
+  .rxDateVal,
+  .qrId,
+  .partyName,
+  .partyDetail,
+  .diagnosis,
+  .instructionsText,
+  .notesText {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .rxDate {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .rxDateGroup {
+    text-align: left;
+  }
+
+  .qrSection {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 10px;
+    row-gap: 2px;
+    width: 100%;
+    justify-items: start;
+    align-items: center;
+    padding: 8px;
+    border: 1px solid var(--rx-line);
+    border-radius: 12px;
+    background: #f8fafc;
+    box-sizing: border-box;
+  }
+
+  .qrCode {
+    grid-row: 1 / span 2;
+    width: 58px;
+    height: 58px;
+    flex: 0 0 auto;
+  }
+
+  .qrLabel,
+  .qrId {
+    display: block;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .qrId {
+    font-size: 8.5px;
+    line-height: 1.35;
+  }
+
+  .statusBadge {
+    justify-self: start;
+    white-space: normal;
+    text-align: left;
+  }
+
+  .successBanner,
+  .warningBanner,
+  .party,
+  .validityBox,
+  .tableWrap,
+  .actions {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* Dashboard-aligned compact sizing */
+.page,
+.detailPage {
+  gap: var(--page-gap);
+  padding: 0;
+}
+
+.loadingWrap {
+  padding: 32px;
+}
+
+.publicHero,
+.card,
+.verifyPanel,
+.party,
+.validityBox,
+.tableWrap,
+.instructions,
+.notes,
+.followUp,
+.detailPill,
+.headerChip,
+.statusBadge,
+.qrSection,
+.successBanner,
+.warningBanner {
+  border-radius: var(--radius-lg);
+}
+
+.publicHero,
+.verifyPanel,
+.rxHeader,
+.parties,
+.validityBox,
+.tableWrap,
+.actions,
+.successBanner,
+.warningBanner {
+  padding: var(--card-padding);
+}
+
+.greeting h1,
+.publicHeroContent h1,
+.verifyContent h1 {
+  font-size: var(--page-title-size);
+}
+
+.greeting p,
+.publicHeroContent p,
+.verifyContent p {
+  font-size: var(--page-subtitle-size);
+}
+
+.backBtn button,
+.verifyActions button,
+.headerChip,
+.detailPill {
+  border-radius: var(--radius-md);
+}
+
+.backBtn button,
+.verifyActions button {
+  min-height: var(--control-height);
+  font-size: var(--control-font-size);
+}
+
+.publicHeroMark,
+.verifyMarkError {
+  font-size: 28px;
+  min-height: 64px;
+}
+
+.rxLogo {
+  font-size: 20px;
+}
+
+.partyName {
+  font-size: 15px;
+}
+
+/* Keep action buttons compact instead of stretching across detail panels. */
+.actions,
+.verifyActions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.actions button,
+.verifyActions button,
+.backBtn button {
+  flex: 0 1 auto;
+  max-width: 240px;
+  min-width: 104px;
+  width: auto;
+}
+
+.backBtn button {
+  min-width: 88px;
+}
+
+@media (max-width: 680px) {
+  .actions button,
+  .verifyActions button,
+  .backBtn button {
+    max-width: 100%;
+    width: auto;
+  }
+}

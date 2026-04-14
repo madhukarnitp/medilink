@@ -221,8 +221,8 @@ exports.getPublicPrescriptionById = async (req, res, next) => {
 
 /**
  * GET /api/prescriptions/public/verify/:id?token=...
- * Public QR verification view. No login required, but the signed token prevents
- * prescription ID enumeration.
+ * Public QR verification view. No login required. A signed token strengthens
+ * the QR/link authenticity check when present, but public access is not blocked.
  */
 exports.verifyPrescription = async (req, res, next) => {
   try {
@@ -239,9 +239,9 @@ exports.verifyPrescription = async (req, res, next) => {
     if (!prescriptionDoc) return error(res, 'Prescription not found', 404);
 
     const token = String(req.query.token || '').trim();
-    if (!isValidPrescriptionVerificationToken(prescriptionDoc, token)) {
-      return error(res, 'Invalid prescription verification token', 401);
-    }
+    const tokenVerified = token
+      ? isValidPrescriptionVerificationToken(prescriptionDoc, token)
+      : false;
 
     if (
       prescriptionDoc.status === PRESCRIPTION_STATUS.ACTIVE &&
@@ -252,7 +252,16 @@ exports.verifyPrescription = async (req, res, next) => {
       await prescriptionDoc.save();
     }
 
-    return success(res, toPublicPrescriptionView(prescriptionDoc, now));
+    const publicView = toPublicPrescriptionView(prescriptionDoc, now);
+    publicView.verification = {
+      ...publicView.verification,
+      publicAccess: true,
+      tokenProvided: Boolean(token),
+      tokenVerified,
+    };
+    publicView.view.verification = publicView.verification;
+
+    return success(res, publicView);
   } catch (err) {
     next(err);
   }

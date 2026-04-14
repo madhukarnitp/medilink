@@ -135,3 +135,40 @@
     display: grid;
   }
 }
+
+/* Dashboard-aligned compact sizing */
+.page {
+  padding: 14px;
+}
+
+.panel {
+  border-radius: var(--radius-lg);
+  gap: 18px;
+  padding: var(--card-padding);
+}
+
+.code {
+  border-radius: var(--radius-lg);
+  font-size: 36px;
+  min-height: 118px;
+}
+
+.copy h1 {
+  font-size: var(--page-title-size);
+}
+
+.copy p {
+  font-size: var(--page-subtitle-size);
+}
+
+.path,
+.primaryBtn,
+.secondaryBtn {
+  border-radius: var(--radius-md);
+}
+
+.primaryBtn,
+.secondaryBtn {
+  min-height: var(--control-height);
+  font-size: var(--control-font-size);
+}

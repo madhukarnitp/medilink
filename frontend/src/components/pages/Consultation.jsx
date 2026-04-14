@@ -6,6 +6,7 @@ import ChatPanel from "./consultation/ChatPanel";
 import ConsultationHeader from "./consultation/ConsultationHeader";
 import CurrentConsultationsList from "./consultation/CurrentConsultationsList";
 import IncomingCallBanner from "./consultation/IncomingCallBanner";
+import RatingModal from "./consultation/RatingModal";
 import VideoPanel from "./consultation/VideoPanel";
 import { getInitials } from "./consultation/consultationUtils";
 import { useConsultationSession } from "./consultation/useConsultationSession";
@@ -235,6 +236,21 @@ function ConsultationRoom({
           />
         )}
       </div>
+
+      {session.showRatingModal && (
+        <RatingModal
+          doctorName={peerName}
+          rating={session.ratingData.rating}
+          comment={session.ratingData.comment}
+          onRatingChange={(rating) => session.setRatingData({ ...session.ratingData, rating })}
+          onCommentChange={(comment) => session.setRatingData({ ...session.ratingData, comment })}
+          onSubmit={session.submitRating}
+          onSkip={() => {
+            session.setShowRatingModal(false);
+            navigate(PAGES.CONSULTATION_LIST);
+          }}
+        />
+      )}
     </div>
   );
 }

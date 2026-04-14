@@ -1,28 +1,42 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
 import { Button, Spinner, ErrorMsg } from "../ui/UI";
-import { patients as patientsApi } from "../../services/api";
+import {
+  consultations as consultationsApi,
+  doctors as doctorsApi,
+  patients as patientsApi,
+  prescriptionCache,
+  prescriptionSelection,
+} from "../../services/api";
 import styles from "./CSS/ConsultationList.module.css";
 
 const getStatusClassName = (status) =>
   ({
+    pending: styles.statusPending,
     completed: styles.statusCompleted,
     active: styles.statusActive,
     cancelled: styles.statusCancelled,
   })[status] || styles.statusDefault;
 
 export default function ConsultationList() {
-  const { navigate } = useApp();
+  const { navigate, pageParams, showToast, user } = useApp();
   const [consultList, setConsultList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
+  const [expandedId, setExpandedId] = useState("");
+  const [details, setDetails] = useState({});
+  const [detailLoading, setDetailLoading] = useState("");
+  const openedFromRoute = useRef("");
+  const isDoctor = user?.role === "doctor";
+  const filters = ["all", "pending", "active", "completed", "cancelled"];
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const r = await patientsApi.getConsultations();
+      const api = isDoctor ? doctorsApi : patientsApi;
+      const r = await api.getConsultations({ limit: 50 });
       setConsultList(r.data || []);
     } catch (e) {
       setError(e.message);
@@ -33,7 +47,72 @@ export default function ConsultationList() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [isDoctor]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      !pageParams?.consultationId ||
+      openedFromRoute.current === pageParams.consultationId
+    ) {
+      return;
+    }
+    openedFromRoute.current = pageParams.consultationId;
+    openDetails(pageParams.consultationId);
+  }, [loading, pageParams?.consultationId]);
+
+  const openDetails = async (consultationId, fallback = null) => {
+    if (!consultationId) return;
+    if (expandedId === consultationId && details[consultationId]) {
+      setExpandedId("");
+      return;
+    }
+
+    setExpandedId(consultationId);
+    if (details[consultationId]) return;
+
+    setDetailLoading(consultationId);
+    try {
+      const [consultationRes, messagesRes] = await Promise.all([
+        consultationsApi.getById(consultationId),
+        consultationsApi.getMessages(consultationId),
+      ]);
+      setDetails((current) => ({
+        ...current,
+        [consultationId]: {
+          consultation: consultationRes.data || fallback,
+          messages: messagesRes.data || [],
+          totalMessages: messagesRes.total || messagesRes.data?.length || 0,
+        },
+      }));
+    } catch (e) {
+      showToast(e.message || "Could not load consultation details", "error");
+    } finally {
+      setDetailLoading("");
+    }
+  };
+
+  const openPrescription = (prescription) => {
+    if (!prescription?._id) return;
+    prescriptionCache.saveItem(prescription);
+    prescriptionSelection.set(prescription._id);
+    navigate(PAGES.PRESCRIPTION, {
+      prescriptionId: prescription._id,
+      prescription,
+    });
+  };
+
+  const createPrescriptionFor = (consultation) => {
+    const patientId = consultation?.patient?._id;
+    if (!patientId) {
+      showToast("Patient details are missing for this consultation", "error");
+      return;
+    }
+    navigate(PAGES.CREATE_PRESCRIPTION, {
+      patientId,
+      consultationId: consultation._id,
+    });
+  };
 
   const filtered =
     filter === "all"
@@ -60,17 +139,27 @@ export default function ConsultationList() {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <h1 className={styles.headerTitle}>My Consultations</h1>
+          <h1 className={styles.headerTitle}>
+            {isDoctor ? "Consultation Records" : "My Consultations"}
+          </h1>
           <p className={styles.headerSubtitle}>
-            View and manage your past and active consultations
+            {isDoctor
+              ? "Review patient consultations, status, and chat history"
+              : "View and manage your past and active consultations"}
           </p>
         </div>
-        <Button variant="primary" onClick={() => navigate(PAGES.DOCTORS)}>
-          + New Consultation
-        </Button>
+        {isDoctor ? (
+          <Button variant="outline" onClick={() => navigate(PAGES.CONSULTATION)}>
+            Current Rooms
+          </Button>
+        ) : (
+          <Button variant="primary" onClick={() => navigate(PAGES.DOCTORS)}>
+            + New Consultation
+          </Button>
+        )}
       </div>
       <div className={styles.filterBar}>
-        {["all", "active", "completed"].map((f) => (
+        {filters.map((f) => (
           <button
             key={f}
             className={`${styles.filterBtn} ${filter === f ? styles.active : ""}`}
@@ -89,9 +178,24 @@ export default function ConsultationList() {
           </div>
         ) : (
           filtered.map((c) => {
-            const docName =
-              c.doctor?.userId?.name || c.doctor?.name || "Doctor";
-            const spec = c.doctor?.specialization || "Specialist";
+            const peer = isDoctor ? c.patient : c.doctor;
+            const peerName =
+              peer?.userId?.name || peer?.name || (isDoctor ? "Patient" : "Doctor");
+            const peerLabel = isDoctor
+              ? "Patient"
+              : c.doctor?.specialization || "Specialist";
+            const isRoomAction = c.status === "active" || c.status === "pending";
+            const actionLabel = isRoomAction
+              ? c.status === "active"
+                ? "Join Chat"
+                : isDoctor
+                  ? "Review"
+                  : "Waiting"
+              : expandedId === c._id
+                ? "Hide Details"
+                : "View More";
+            const detail = details[c._id];
+            const detailConsultation = detail?.consultation || c;
             return (
               <div key={c._id} className={styles.card}>
                 <div className={styles.cardHeader}>
@@ -105,7 +209,8 @@ export default function ConsultationList() {
                         month: "short",
                         year: "numeric",
                       })}{" "}
-                      • Dr. {docName.replace("Dr. ", "")} ({spec})
+                      • {peerLabel}:{" "}
+                      {isDoctor ? peerName : `Dr. ${peerName.replace("Dr. ", "")}`}
                     </div>
                   </div>
                   <div
@@ -116,14 +221,31 @@ export default function ConsultationList() {
                 </div>
                 <div className={styles.actions}>
                   <Button
-                    variant={c.status === "active" ? "primary" : "outline"}
-                    onClick={() =>
-                      navigate(PAGES.CONSULTATION, { consultationId: c._id })
-                    }
+                    variant={isRoomAction ? "primary" : "outline"}
+                    onClick={() => {
+                      if (isRoomAction) {
+                        navigate(PAGES.CONSULTATION, { consultationId: c._id });
+                        return;
+                      }
+                      openDetails(c._id, c);
+                    }}
+                    disabled={c.status === "pending" && !isDoctor}
                   >
-                    {c.status === "active" ? "Join Call" : "View Details"}
+                    {actionLabel}
                   </Button>
                 </div>
+                {expandedId === c._id ? (
+                  <ConsultationDetails
+                    consultation={detailConsultation}
+                    detailLoading={detailLoading === c._id}
+                    isDoctor={isDoctor}
+                    messages={detail?.messages || []}
+                    onCreatePrescription={createPrescriptionFor}
+                    onOpenPrescription={openPrescription}
+                    totalMessages={detail?.totalMessages || 0}
+                    user={user}
+                  />
+                ) : null}
               </div>
             );
           })
@@ -131,4 +253,145 @@ export default function ConsultationList() {
       </div>
     </div>
   );
+}
+
+function ConsultationDetails({
+  consultation,
+  detailLoading,
+  isDoctor,
+  messages,
+  onCreatePrescription,
+  onOpenPrescription,
+  totalMessages,
+  user,
+}) {
+  const prescription = consultation?.prescription;
+  const duration = formatDuration(consultation?.duration);
+  const chatPreview = messages.slice(-8);
+
+  return (
+    <div className={styles.detailPanel}>
+      {detailLoading ? (
+        <div className={styles.detailLoading}>
+          <Spinner size={24} />
+        </div>
+      ) : (
+        <>
+          <div className={styles.detailGrid}>
+            <DetailItem label="Requested" value={formatDateTime(consultation?.createdAt)} />
+            <DetailItem label="Started" value={formatDateTime(consultation?.startedAt)} />
+            <DetailItem label="Ended" value={formatDateTime(consultation?.endedAt)} />
+            <DetailItem label="Call Time" value={duration} />
+            <DetailItem label="Messages" value={String(totalMessages)} />
+            <DetailItem label="Room" value={consultation?.roomId?.slice(-12) || "—"} />
+          </div>
+
+          {consultation?.notes ? (
+            <div className={styles.notesBox}>
+              <span>Doctor Notes</span>
+              <p>{consultation.notes}</p>
+            </div>
+          ) : null}
+
+          <div className={styles.relatedRow}>
+            <div>
+              <div className={styles.relatedTitle}>Related Prescription</div>
+              <div className={styles.relatedMeta}>
+                {prescription
+                  ? `${prescription.rxId || "Prescription"} · ${prescription.diagnosis || "Diagnosis added"}`
+                  : "No prescription is linked to this consultation yet."}
+              </div>
+            </div>
+            {prescription ? (
+              <Button variant="primary" onClick={() => onOpenPrescription(prescription)}>
+                View Prescription
+              </Button>
+            ) : isDoctor && consultation?.status === "completed" ? (
+              <Button variant="primary" onClick={() => onCreatePrescription(consultation)}>
+                Create Prescription
+              </Button>
+            ) : null}
+          </div>
+
+          <div className={styles.chatSection}>
+            <div className={styles.chatHeader}>
+              <h3>Chat Transcript</h3>
+              {totalMessages > chatPreview.length ? (
+                <span>Last {chatPreview.length} messages</span>
+              ) : null}
+            </div>
+            {chatPreview.length ? (
+              <div className={styles.messageList}>
+                {chatPreview.map((message) => {
+                  const mine =
+                    String(message.sender?._id || message.sender) === String(user?._id);
+                  const senderName =
+                    message.sender?.name ||
+                    (message.senderRole === "doctor" ? "Doctor" : "Patient");
+                  return (
+                    <div
+                      key={message._id}
+                      className={`${styles.messageRow} ${
+                        mine ? styles.messageMine : ""
+                      }`}
+                    >
+                      <div className={styles.messageMeta}>
+                        <span>{mine ? "You" : senderName}</span>
+                        <span>{formatTime(message.createdAt)}</span>
+                      </div>
+                      <div className={styles.messageText}>
+                        {message.text || "Attachment"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className={styles.emptyTranscript}>
+                No chat messages were recorded.
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function DetailItem({ label, value }) {
+  return (
+    <div className={styles.detailItem}>
+      <span>{label}</span>
+      <strong>{value || "—"}</strong>
+    </div>
+  );
+}
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatTime(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatDuration(value) {
+  if (value === undefined || value === null) return "—";
+  const minutes = Number(value);
+  if (!minutes) return "Less than 1 min";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours} hr ${remainder} min` : `${hours} hr`;
 }

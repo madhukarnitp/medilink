@@ -221,11 +221,13 @@ function UserRow({
   saving,
 }) {
   const id = item._id || item.id;
-  const emailVerified =
-    item.isEmailVerified ??
-    item.isVerified ??
-    item.emailVerified ??
-    item.verified;
+  const isAdmin = item.role === "admin";
+  const emailVerified = isAdmin
+    ? true
+    : item.isEmailVerified ??
+      item.isVerified ??
+      item.emailVerified ??
+      item.verified;
   const doctorVerified = item.profile?.isVerified;
   const status =
     item.status || (item.isActive === false ? "blocked" : "active");
@@ -248,7 +250,11 @@ function UserRow({
         <span
           className={`${styles.statusPill} ${emailVerified ? styles.good : styles.warn}`}
         >
-          {emailVerified ? "Email verified" : "Email pending"}
+          {isAdmin
+            ? "Manual admin"
+            : emailVerified
+              ? "Email verified"
+              : "Email pending"}
         </span>
         {item.role === "doctor" && (
           <span
@@ -270,7 +276,7 @@ function UserRow({
           <button disabled={saving} onClick={() => onView(id)} type="button">
             Details
           </button>
-          {!emailVerified && (
+          {!isAdmin && !emailVerified && (
             <button
               disabled={saving}
               onClick={() => onVerify(id)}
@@ -313,6 +319,7 @@ function UserDetailsPanel({
   const user = data?.user || data;
   const profile = data?.profile || null;
   const userId = user?._id || user?.id;
+  const isAdmin = user?.role === "admin";
   const isDoctor = user?.role === "doctor";
   const doctorVerified = Boolean(profile?.isVerified);
 
@@ -348,7 +355,12 @@ function UserDetailsPanel({
               items={[
                 ["Role", user?.role],
                 ["Phone", user?.phone],
-                ["Email verified", yesNo(user?.isEmailVerified)],
+                [
+                  isAdmin ? "Provisioning" : "Email verified",
+                  isAdmin
+                    ? "Manual database account"
+                    : yesNo(user?.isEmailVerified),
+                ],
                 ["Status", user?.isActive === false ? "Blocked" : "Active"],
                 ["Joined", formatDateTime(user?.createdAt)],
                 ["Last seen", formatDateTime(user?.lastSeen)],
@@ -409,11 +421,13 @@ function filterUsers(users, { accountFilter, query, roleFilter }) {
 
   return users.filter((user) => {
     const status = user.isActive === false ? "blocked" : "active";
-    const emailVerified =
-      user.isEmailVerified ??
-      user.isVerified ??
-      user.emailVerified ??
-      user.verified;
+    const isAdmin = user.role === "admin";
+    const emailVerified = isAdmin
+      ? true
+      : user.isEmailVerified ??
+        user.isVerified ??
+        user.emailVerified ??
+        user.verified;
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
     const matchesStatus =
       accountFilter === "all" ||
@@ -443,12 +457,14 @@ function exportUsersCsv(users) {
       user.email || "",
       user.role || "",
       user.isActive === false ? "Blocked" : "Active",
-      yesNo(
-        user.isEmailVerified ??
-          user.isVerified ??
-          user.emailVerified ??
-          user.verified,
-      ),
+      user.role === "admin"
+        ? "Not required"
+        : yesNo(
+            user.isEmailVerified ??
+              user.isVerified ??
+              user.emailVerified ??
+              user.verified,
+          ),
       user.role === "doctor" ? yesNo(user.profile?.isVerified) : "",
     ]),
   ];

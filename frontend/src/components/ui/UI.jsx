@@ -162,3 +162,29 @@ export function EmptyState({ icon = "📭", title, subtitle, action, onAction })
     </div>
   );
 }
+
+/* ── Modal ─────────────────────────────────────── */
+export function Modal({
+  onClose,
+  children,
+  closeOnBackdrop = true,
+  priority = false,
+}) {
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget && closeOnBackdrop && onClose) {
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      className={`${styles.modalBackdrop} ${priority ? styles.modalBackdropPriority : ""}`}
+      onClick={handleBackdropClick}
+      role="presentation"
+    >
+      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
+}

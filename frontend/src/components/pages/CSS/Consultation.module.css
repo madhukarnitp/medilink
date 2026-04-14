@@ -983,3 +983,124 @@
     height: 54px;
   }
 }
+
+/* Dashboard-aligned compact sizing */
+.page {
+  gap: var(--page-gap);
+}
+
+.loadingWrap {
+  padding: 32px;
+}
+
+.greeting h1 {
+  font-size: var(--page-title-size);
+}
+
+.greeting p {
+  font-size: var(--page-subtitle-size);
+}
+
+.incomingBanner,
+.roomModeBar,
+.roomCard,
+.roomEmpty,
+.chatPanel,
+.videoPanel,
+.bubble,
+.reactionPicker,
+.chatInput,
+.videoMain,
+.pip,
+.pipPlaceholder {
+  border-radius: var(--radius-lg);
+}
+
+.incomingBanner,
+.roomCard,
+.roomEmpty,
+.chatHeader,
+.videoHeader,
+.chatInput,
+.videoControls {
+  padding: var(--card-padding);
+}
+
+.roomStatus,
+.liveBadge,
+.connectingBadge,
+.timer,
+.reaction,
+.modeSwitchBtn,
+.acceptBtn,
+.declineBtn,
+.acceptConsultationBtn,
+.sendBtn,
+.vcBtn,
+.vcActionBtn,
+.callBtn,
+.hangBtn,
+.leaveBtn,
+.endBtn {
+  border-radius: var(--radius-md);
+}
+
+.modeSwitchBtn,
+.acceptBtn,
+.declineBtn,
+.acceptConsultationBtn,
+.sendBtn,
+.vcBtn,
+.vcActionBtn,
+.callBtn,
+.hangBtn,
+.leaveBtn,
+.endBtn {
+  min-height: var(--control-height);
+  font-size: var(--control-font-size);
+}
+
+.roomTitleRow h2,
+.chatDocName {
+  font-size: 15px;
+}
+
+.emptyChatIcon,
+.videoAvatar {
+  font-size: 28px;
+}
+
+/* Keep call controls compact on desktop while still wrapping cleanly. */
+.roomActions,
+.incomingActions,
+.videoControls,
+.videoControlGroup {
+  flex-wrap: wrap;
+}
+
+.modeSwitchBtn,
+.acceptBtn,
+.declineBtn,
+.acceptConsultationBtn,
+.sendBtn,
+.vcBtn,
+.vcActionBtn,
+.callBtn,
+.hangBtn,
+.leaveBtn,
+.endBtn {
+  flex: 0 1 auto;
+  max-width: 220px;
+  width: auto;
+}
+
+.vcBtn {
+  min-width: 78px;
+}
+
+.callBtn,
+.hangBtn,
+.leaveBtn,
+.endBtn {
+  min-width: 92px;
+}

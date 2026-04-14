@@ -1,7 +1,10 @@
 .page {
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-gap);
+  max-width: none;
+  margin: 0;
+  padding: 0;
   animation: fadeIn 0.25s ease;
 }
 
@@ -9,8 +12,8 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 24px;
+  gap: 12px;
+  margin-bottom: 0;
 }
 
 .header h1 {
@@ -29,10 +32,10 @@
 .bookingPanel {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
-  gap: 14px;
+  gap: 10px;
   align-items: end;
-  padding: 18px;
-  margin-bottom: 24px;
+  padding: 12px;
+  margin-bottom: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #fff;
@@ -72,15 +75,15 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 16px;
-  padding: 18px;
+  gap: 10px;
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #fff;
@@ -171,7 +174,7 @@
 
 @media (max-width: 760px) {
   .page {
-    padding: 20px;
+    padding: 0;
   }
 
   .header {
@@ -191,4 +194,57 @@
   .actions {
     justify-content: flex-start;
   }
+}
+
+/* Dashboard-aligned compact sizing */
+.page {
+  gap: var(--page-gap);
+  max-width: none;
+  padding: 0;
+}
+
+.header {
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.header h1 {
+  font-size: var(--page-title-size);
+}
+
+.header p {
+  font-size: var(--page-subtitle-size);
+}
+
+.bookingPanel,
+.card,
+.empty,
+.loadingWrap {
+  border-radius: var(--radius-lg);
+}
+
+.bookingPanel,
+.card {
+  padding: var(--card-padding);
+}
+
+.field select,
+.field input,
+.fieldWide input {
+  min-height: var(--control-height);
+}
+
+.cardTitle {
+  font-size: 15px;
+}
+
+.status {
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  padding: 4px 9px;
+}
+
+.empty,
+.loadingWrap {
+  min-height: 220px;
 }

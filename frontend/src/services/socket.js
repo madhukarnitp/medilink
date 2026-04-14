@@ -1,8 +1,14 @@
 import { io } from "socket.io-client";
 
 const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL ||
-  (import.meta.env.DEV ? window.location.origin : "http://localhost:5001");
+  import.meta.env.VITE_REALTIME_URL ||
+  (import.meta.env.DEV ? "http://localhost:5002" : window.location.origin);
+const SOCKET_TRANSPORTS = (
+  import.meta.env.VITE_SOCKET_TRANSPORTS || "websocket"
+)
+  .split(",")
+  .map((transport) => transport.trim())
+  .filter(Boolean);
 
 let socket = null;
 let socketToken = null;
@@ -32,13 +38,15 @@ export const connectSocket = (token) => {
   socket = io(SOCKET_URL, {
     path: "/socket.io",
     auth: { token },
-    transports: ["polling", "websocket"],
-    upgrade: true,
+    transports: SOCKET_TRANSPORTS,
+    upgrade: SOCKET_TRANSPORTS.length > 1,
+    withCredentials: true,
     reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    timeout: 20000,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 800,
+    reconnectionDelayMax: 6000,
+    timeout: 15000,
+    closeOnBeforeunload: true,
   });
 
   socket.on("connect", () => console.log("[Socket] ✓ connected", socket.id));

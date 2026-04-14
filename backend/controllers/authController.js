@@ -4,7 +4,8 @@ const Patient = require('../models/Patient');
 const Doctor = require('../models/Doctor');
 const { success, error } = require('../utils/apiResponse');
 const { sendEmail, emailTemplates } = require('../utils/email');
-const { ROLES } = require('../utils/constants');
+const { ROLES, SOCKET_EVENTS } = require('../utils/constants');
+const { emitToRealtimeBroadcast } = require('../utils/realtimeBridge');
 
 /**
  * POST /api/auth/register
@@ -94,6 +95,12 @@ exports.login = async (req, res, next) => {
     // Set doctor online
     if (user.role === ROLES.DOCTOR) {
       await Doctor.findOneAndUpdate({ userId: user._id }, { online: true });
+      emitToRealtimeBroadcast(SOCKET_EVENTS.DOCTOR_ONLINE, {
+        doctorUserId: user._id,
+        online: true,
+      }).catch((socketErr) => {
+        console.warn(`[auth] Realtime doctor online emit failed: ${socketErr.message}`);
+      });
     }
 
     const token = user.getSignedToken();
@@ -113,6 +120,13 @@ exports.logout = async (req, res, next) => {
   try {
     if (req.user?.role === ROLES.DOCTOR) {
       await Doctor.findOneAndUpdate({ userId: req.user._id }, { online: false });
+      emitToRealtimeBroadcast(SOCKET_EVENTS.DOCTOR_OFFLINE, {
+        doctorUserId: req.user._id,
+        online: false,
+        lastSeen: new Date(),
+      }).catch((socketErr) => {
+        console.warn(`[auth] Realtime doctor offline emit failed: ${socketErr.message}`);
+      });
     }
     return success(res, null, 200);
   } catch (err) {
@@ -132,6 +146,36 @@ exports.getMe = async (req, res, next) => {
       profile = await Patient.findOne({ userId: req.user._id });
     } else if (req.user.role === ROLES.DOCTOR) {
       profile = await Doctor.findOne({ userId: req.user._id });
+    }
+
+    return success(res, { user: user.toSafeJSON(), profile });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * PUT /api/auth/me
+ */
+exports.updateMe = async (req, res, next) => {
+  try {
+    const updates = {};
+    if (req.body.name !== undefined) updates.name = req.body.name;
+    if (req.body.phone !== undefined) updates.phone = req.body.phone || undefined;
+    if (req.file?.path) updates.avatar = req.file.path;
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+    if (!user) return error(res, 'User not found', 404);
+
+    let profile = null;
+    if (user.role === ROLES.PATIENT) {
+      profile = await Patient.findOne({ userId: user._id });
+    } else if (user.role === ROLES.DOCTOR) {
+      profile = await Doctor.findOne({ userId: user._id });
     }
 
     return success(res, { user: user.toSafeJSON(), profile });
@@ -272,8 +316,8 @@ async function getAuthenticationBlock(user) {
     };
   }
 
-  // Email verification is MANDATORY for all users
-  if (!user.isEmailVerified) {
+  // Admin accounts are provisioned manually, so they do not use public email verification.
+  if (user.role !== ROLES.ADMIN && !user.isEmailVerified) {
     return {
       message: 'Please verify your email before logging in',
       statusCode: 403,

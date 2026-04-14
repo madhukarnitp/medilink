@@ -1,7 +1,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--page-gap-lg);
   position: relative;
 }
 
@@ -54,14 +54,14 @@
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
 }
 
 .quickActions {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
 
 .quickActions h2 {
@@ -73,18 +73,18 @@
 
 .actionGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
 }
 
 .actionCard {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 20px;
+  padding: 14px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
@@ -120,7 +120,7 @@
 .recentSection {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
 
 .recentSection h2 {
@@ -194,7 +194,7 @@
 
 @media (max-width: 768px) {
   .page {
-    padding: 16px;
+    padding: 0;
   }
 
   .header {
@@ -215,4 +215,64 @@
     flex-direction: column;
     text-align: center;
   }
+}
+
+/* Dashboard-aligned compact sizing */
+.page {
+  gap: var(--page-gap);
+}
+
+.loadingWrap {
+  padding: 32px;
+}
+
+.header {
+  gap: 12px;
+}
+
+.header h1,
+.headerTitle {
+  font-size: var(--page-title-size);
+}
+
+.header p,
+.headerSubtitle {
+  font-size: var(--page-subtitle-size);
+}
+
+.sectionTitle,
+.quickActions h2,
+.recentSection h2 {
+  font-size: var(--section-title-size);
+}
+
+.statsGrid,
+.actionGrid,
+.quickActions,
+.recentSection {
+  gap: 8px;
+}
+
+.actionCard,
+.empty,
+.prescriptionItem {
+  border-radius: var(--radius-lg);
+}
+
+.actionCard,
+.prescriptionItem {
+  padding: var(--card-padding);
+}
+
+.actionIcon {
+  font-size: 24px;
+}
+
+.actionTitle {
+  font-size: 14px;
+}
+
+.actionDesc,
+.empty {
+  font-size: 13px;
 }

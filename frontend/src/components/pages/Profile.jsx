@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useApp, PAGES } from "../../context/AppContext";
+import { getHomePage, useApp } from "../../context/AppContext";
 import { Button, Spinner, ErrorMsg } from "../ui/UI";
 import {
   auth as authApi,
@@ -44,9 +44,10 @@ export default function Profile() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState(null);
-  const isDoctor = user?.role === "doctor";
   const isAdmin = user?.role === "admin";
-  const canEditProfile = !isAdmin;
+  const isDoctor = user?.role === "doctor";
+  const homePage = getHomePage(user?.role);
+  const canEditProfile = Boolean(user);
 
   const load = async () => {
     setLoading(true);
@@ -83,11 +84,16 @@ export default function Profile() {
       .join("")
       .toUpperCase()
       .slice(0, 2) || "U";
+  const roleLabel = isAdmin
+    ? "Administrator"
+    : isDoctor
+      ? "Medical Doctor"
+      : "Patient";
 
   useEffect(() => {
     if (!user) return;
-    setForm(buildFormState(user, profileData, isDoctor));
-  }, [user, contextProfile, dashboardData, isDoctor]);
+    setForm(buildFormState(user, profileData, isDoctor, isAdmin));
+  }, [user, contextProfile, dashboardData, isDoctor, isAdmin]);
 
   const handleChange = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -103,7 +109,7 @@ export default function Profile() {
   };
 
   const resetForm = () => {
-    setForm(buildFormState(user, profileData, isDoctor));
+    setForm(buildFormState(user, profileData, isDoctor, isAdmin));
     setIsEditing(false);
     setError("");
   };
@@ -115,9 +121,11 @@ export default function Profile() {
     setError("");
 
     try {
-      const payload = buildProfilePayload(form, isDoctor);
+      const payload = buildProfilePayload(form, isDoctor, isAdmin);
 
-      if (isDoctor) {
+      if (isAdmin) {
+        await authApi.updateMe(payload);
+      } else if (isDoctor) {
         await doctorsApi.updateProfile(payload);
       } else {
         await patientsApi.updateProfile(payload);
@@ -157,14 +165,18 @@ export default function Profile() {
       <div className={styles.header}>
         <div className={styles.greeting}>
           <h1>My Profile</h1>
-          <p>View and manage your account and health details</p>
+          <p>
+            {isAdmin
+              ? "View and manage your platform account details"
+              : "View and manage your account and health details"}
+          </p>
         </div>
 
         <div className={styles.headerActions}>
           <Button
             variant="outline"
             onClick={() =>
-              navigate(isDoctor ? PAGES.DOCTOR_DASHBOARD : PAGES.DASHBOARD)
+              navigate(homePage, {}, { updateUrl: true, replace: true })
             }
           >
             ← Back to Dashboard
@@ -232,13 +244,7 @@ export default function Profile() {
             )}
           </h2>
 
-          <div className={styles.roleBadge}>
-            {isAdmin
-              ? "Administrator"
-              : isDoctor
-                ? "Medical Doctor"
-                : "Patient"}
-          </div>
+          <div className={styles.roleBadge}>{roleLabel}</div>
 
           <div className={styles.contactSection}>
             <ContactBlock label="Email">
@@ -260,50 +266,56 @@ export default function Profile() {
               )}
             </ContactBlock>
 
-            <ContactBlock label="Location">
-              {isEditing && !isDoctor ? (
-                <div className={styles.addressForm}>
-                  <input
-                    value={form?.street || ""}
-                    onChange={(e) => handleChange("street", e.target.value)}
-                    className={styles.input}
-                    placeholder="Street address"
-                  />
-                  <div className={styles.twoCol}>
+            {!isAdmin ? (
+              <ContactBlock label="Location">
+                {isEditing && !isDoctor ? (
+                  <div className={styles.addressForm}>
                     <input
-                      value={form?.city || ""}
-                      onChange={(e) => handleChange("city", e.target.value)}
+                      value={form?.street || ""}
+                      onChange={(e) => handleChange("street", e.target.value)}
                       className={styles.input}
-                      placeholder="City"
+                      placeholder="Street address"
                     />
-                    <input
-                      value={form?.state || ""}
-                      onChange={(e) => handleChange("state", e.target.value)}
-                      className={styles.input}
-                      placeholder="State"
-                    />
+                    <div className={styles.twoCol}>
+                      <input
+                        value={form?.city || ""}
+                        onChange={(e) => handleChange("city", e.target.value)}
+                        className={styles.input}
+                        placeholder="City"
+                      />
+                      <input
+                        value={form?.state || ""}
+                        onChange={(e) => handleChange("state", e.target.value)}
+                        className={styles.input}
+                        placeholder="State"
+                      />
+                    </div>
+                    <div className={styles.twoCol}>
+                      <input
+                        value={form?.country || ""}
+                        onChange={(e) =>
+                          handleChange("country", e.target.value)
+                        }
+                        className={styles.input}
+                        placeholder="Country"
+                      />
+                      <input
+                        value={form?.pincode || ""}
+                        onChange={(e) =>
+                          handleChange("pincode", e.target.value)
+                        }
+                        className={styles.input}
+                        placeholder="Pincode"
+                      />
+                    </div>
                   </div>
-                  <div className={styles.twoCol}>
-                    <input
-                      value={form?.country || ""}
-                      onChange={(e) => handleChange("country", e.target.value)}
-                      className={styles.input}
-                      placeholder="Country"
-                    />
-                    <input
-                      value={form?.pincode || ""}
-                      onChange={(e) => handleChange("pincode", e.target.value)}
-                      className={styles.input}
-                      placeholder="Pincode"
-                    />
+                ) : (
+                  <div className={styles.contactValue}>
+                    {locationText || "N/A"}
                   </div>
-                </div>
-              ) : (
-                <div className={styles.contactValue}>
-                  {locationText || "N/A"}
-                </div>
-              )}
-            </ContactBlock>
+                )}
+              </ContactBlock>
+            ) : null}
 
             <Button
               variant="outline"
@@ -319,7 +331,11 @@ export default function Profile() {
         <div className={styles.rightColumn}>
           <section className={styles.sectionCard}>
             <h3 className={styles.sectionTitle}>
-              {isDoctor ? "Professional Information" : "Health Profile"}
+              {isAdmin
+                ? "Admin Account"
+                : isDoctor
+                  ? "Professional Information"
+                  : "Health Profile"}
             </h3>
 
             <div className={styles.infoGrid}>
@@ -327,12 +343,8 @@ export default function Profile() {
                 <>
                   <InfoField label="Role" value="Administrator" />
                   <InfoField
-                    label="Email Verification"
-                    value={
-                      user?.isVerified || user?.emailVerified
-                        ? "Verified"
-                        : "Pending"
-                    }
+                    label="Provisioning"
+                    value="Manual database account"
                   />
                   <InfoField
                     label="Account Status"
@@ -615,9 +627,29 @@ export default function Profile() {
           </section>
 
           <section className={styles.sectionCard}>
-            <h3 className={styles.sectionTitle}>Activity Overview</h3>
+            <h3 className={styles.sectionTitle}>
+              {isAdmin ? "Admin Overview" : "Activity Overview"}
+            </h3>
             <div className={styles.statsGrid}>
-              {!isDoctor ? (
+              {isAdmin ? (
+                <>
+                  <StatBox
+                    label="Account Status"
+                    value={user?.status || "Active"}
+                    tone={styles.statGreen}
+                  />
+                  <StatBox
+                    label="Access"
+                    value="Admin"
+                    tone={styles.statBlue}
+                  />
+                  <StatBox
+                    label="Provisioning"
+                    value="Manual"
+                    tone={styles.statPurple}
+                  />
+                </>
+              ) : !isDoctor ? (
                 <>
                   <StatBox
                     label="Total Consultations"
@@ -692,14 +724,22 @@ function StatBox({ label, value, tone }) {
   );
 }
 
-function buildFormState(user, profile, isDoctor) {
+function buildFormState(user, profile, isDoctor, isAdmin) {
+  const baseState = {
+    name: user?.name || "",
+    phone: user?.phone || "",
+    avatar: profile?.avatar || user?.avatar || "",
+    avatarFile: null,
+    avatarPreview: "",
+  };
+
+  if (isAdmin) {
+    return baseState;
+  }
+
   if (isDoctor) {
     return {
-      name: user?.name || "",
-      phone: user?.phone || "",
-      avatar: profile?.avatar || user?.avatar || "",
-      avatarFile: null,
-      avatarPreview: "",
+      ...baseState,
       specialization: profile?.specialization || "",
       qualification: profile?.qualification || "",
       regNo: profile?.regNo || "",
@@ -712,11 +752,7 @@ function buildFormState(user, profile, isDoctor) {
 
   const address = profile?.address || {};
   return {
-    name: user?.name || "",
-    phone: user?.phone || "",
-    avatar: profile?.avatar || user?.avatar || "",
-    avatarFile: null,
-    avatarPreview: "",
+    ...baseState,
     age: profile?.age ?? "",
     gender: profile?.gender || "",
     weight: profile?.weight ?? "",
@@ -731,10 +767,12 @@ function buildFormState(user, profile, isDoctor) {
   };
 }
 
-function buildProfilePayload(form, isDoctor) {
-  const payload = isDoctor
-    ? buildDoctorPayload(form)
-    : buildPatientPayload(form);
+function buildProfilePayload(form, isDoctor, isAdmin) {
+  const payload = isAdmin
+    ? buildAdminPayload(form)
+    : isDoctor
+      ? buildDoctorPayload(form)
+      : buildPatientPayload(form);
   if (!form.avatarFile) return payload;
 
   const data = new FormData();
@@ -748,6 +786,13 @@ function buildProfilePayload(form, isDoctor) {
   });
   data.append("avatar", form.avatarFile);
   return data;
+}
+
+function buildAdminPayload(form) {
+  return {
+    name: form.name.trim(),
+    phone: form.phone?.trim?.() ?? "",
+  };
 }
 
 function buildPatientPayload(form) {

@@ -362,6 +362,14 @@ export const auth = {
     clearTokens();
   },
   getMe: () => req("/auth/me", { cachePolicy: "persist" }),
+  updateMe: (d) =>
+    req("/auth/me", {
+      method: "PUT",
+      body:
+        typeof FormData !== "undefined" && d instanceof FormData
+          ? d
+          : JSON.stringify(d),
+    }),
   requestVerification: (email) =>
     req("/auth/request-verification", {
       method: "POST",
@@ -411,6 +419,34 @@ export const doctors = {
     req(`/doctors/consultations?${new URLSearchParams(p)}`, {
       cachePolicy: "persist",
     }),
+  getPatients: (p = {}) =>
+    req(`/doctors/patients?${new URLSearchParams(p)}`, {
+      cacheTtlMs: 15_000,
+    }),
+  addReview: (doctorId, review) =>
+    req(`/doctors/${doctorId}/review`, { method: "POST", body: JSON.stringify(review) }),
+};
+
+export const vitals = {
+  getForPatient: (patientId, p = {}) =>
+    req(`/vitals/${patientId}?${new URLSearchParams(p)}`),
+  addForPatient: (patientId, vital) =>
+    req(`/vitals/${patientId}`, { method: "POST", body: JSON.stringify(vital) }),
+  update: (id, vital) =>
+    req(`/vitals/${id}`, { method: "PUT", body: JSON.stringify(vital) }),
+  delete: (id) =>
+    req(`/vitals/${id}`, { method: "DELETE" }),
+};
+
+export const reports = {
+  getForPatient: (patientId, p = {}) =>
+    req(`/reports/${patientId}?${new URLSearchParams(p)}`),
+  addForPatient: (patientId, report) =>
+    req(`/reports/${patientId}`, { method: "POST", body: JSON.stringify(report) }),
+  update: (id, report) =>
+    req(`/reports/${id}`, { method: "PUT", body: JSON.stringify(report) }),
+  delete: (id) =>
+    req(`/reports/${id}`, { method: "DELETE" }),
 };
 
 export const patients = {

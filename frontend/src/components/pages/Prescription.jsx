@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { useApp, PAGES } from "../../context/AppContext";
+import { getHomePage, useApp, PAGES } from "../../context/AppContext";
 import { Button, Spinner, ErrorMsg } from "../ui/UI";
 import {
   prescriptions as rxApi,
@@ -165,9 +165,9 @@ export default function Prescription() {
     }
     if (isVerificationView && user) {
       navigate(
-        user.role === "doctor" ? PAGES.DOCTOR_DASHBOARD : PAGES.DASHBOARD,
+        getHomePage(user.role),
         {},
-        { replace: true },
+        { updateUrl: true, replace: true },
       );
       return;
     }

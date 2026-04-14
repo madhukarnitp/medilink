@@ -1,7 +1,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--page-gap-lg);
 }
 
 .loadingWrap {
@@ -14,7 +14,7 @@
 .sectionHeader {
   align-items: center;
   display: flex;
-  gap: 16px;
+  gap: 10px;
   justify-content: space-between;
 }
 
@@ -22,7 +22,7 @@
   background: linear-gradient(135deg, rgba(0, 123, 255, 0.1), rgba(16, 185, 129, 0.08)), var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 18px;
+  padding: 14px;
 }
 
 .eyebrow {
@@ -935,4 +935,83 @@
   .checkItem {
     flex-wrap: wrap;
   }
+}
+
+/* Dashboard-aligned compact sizing */
+.page {
+  gap: var(--page-gap);
+}
+
+.loadingWrap {
+  padding: 32px;
+}
+
+.header {
+  gap: 12px;
+}
+
+.headerTitle,
+.heroTitle,
+.drawerTitle {
+  font-size: var(--page-title-size);
+}
+
+.headerSubtitle,
+.heroText,
+.drawerSubtitle {
+  font-size: var(--page-subtitle-size);
+}
+
+.metricCard,
+.heroCard,
+.panel,
+.sectionCard,
+.tableCard,
+.detailsPanel,
+.verifyBox,
+.detailItem,
+.checkItem,
+.insightCard,
+.statCard,
+.actionCard {
+  border-radius: var(--radius-lg);
+}
+
+.metricCard,
+.heroCard,
+.panel,
+.sectionCard,
+.tableCard,
+.verifyBox,
+.detailItem,
+.checkItem,
+.insightCard,
+.statCard,
+.actionCard {
+  padding: var(--card-padding);
+}
+
+.viewTabs,
+.tab,
+.pill,
+.status,
+.filterBtn,
+.actionButton,
+.drawerAction,
+.adminButton {
+  border-radius: var(--radius-md);
+}
+
+.tab,
+.filterBtn,
+.actionButton,
+.drawerAction,
+.adminButton {
+  min-height: var(--control-height);
+  font-size: var(--control-font-size);
+}
+
+.metricValue,
+.statValue {
+  font-size: 22px;
 }

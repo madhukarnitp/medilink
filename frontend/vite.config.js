@@ -11,9 +11,9 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://localhost:5001',
+        target: 'http://localhost:5002',
         changeOrigin: true,
-        ws: true,        // ← proxy WebSocket upgrades
+        ws: true,
       },
     },
   },

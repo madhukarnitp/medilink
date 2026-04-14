@@ -6,11 +6,7 @@ const { success, error, paginate } = require('../utils/apiResponse');
 const { sendEmail, emailTemplates } = require('../utils/email');
 const { CONSULTATION_STATUS, PAGINATION, SOCKET_EVENTS } = require('../utils/constants');
 const { createNotification } = require('../utils/notifications');
-
-// Lazy-import socket helpers to avoid circular dep
-const getIO = () => {
-  try { return require('../socket/ioInstance'); } catch { return null; }
-};
+const { emitToRealtimeRoom, emitToRealtimeUser } = require('../utils/realtimeBridge');
 
 /**
  * POST /api/consultations
@@ -98,11 +94,11 @@ exports.startConsultation = async (req, res, next) => {
 };
 
 function notifyDoctorConsultationRequest({ consultation, doctor, patient, reason, reused = false }) {
-  try {
-    const { emitToUser } = require('../socket/handlers');
-    const io = require('../socket/ioInstance').get();
-    if (io && doctor?.userId?._id) {
-      emitToUser(io, doctor.userId._id, 'consultationRequest', {
+  if (doctor?.userId?._id) {
+    emitToRealtimeUser(
+      doctor.userId._id,
+      'consultationRequest',
+      {
         consultationId: consultation._id,
         roomId: consultation.roomId,
         status: consultation.status,
@@ -113,12 +109,16 @@ function notifyDoctorConsultationRequest({ consultation, doctor, patient, reason
         },
         reason: reason || 'General consultation',
         createdAt: consultation.createdAt,
+      },
+    )
+      .then((sent) => {
+        if (sent) {
+          console.log(`[consultations] Realtime notification sent to doctor ${doctor.userId.name}`);
+        }
+      })
+      .catch((socketErr) => {
+        console.warn(`[consultations] Realtime notification failed: ${socketErr.message}`);
       });
-
-      console.log(`[consultations] Socket notification sent to doctor ${doctor.userId.name}`);
-    }
-  } catch (socketErr) {
-    console.warn(`[consultations] Socket notification failed: ${socketErr.message}`);
   }
 
   createNotification({
@@ -150,22 +150,23 @@ exports.leaveConsultation = async (req, res, next) => {
     await _assertAccess(req.user, consultation);
 
     try {
-      const ioModule = getIO();
-      const io = ioModule?.get ? ioModule.get() : ioModule;
       const roomId = consultation.roomId || consultation._id.toString();
 
-      if (io && roomId) {
-        io.to(roomId).emit('webrtc:peer-left', {
+      if (roomId) {
+        const payload = {
           consultationId: consultation._id,
           roomId,
           userId: req.user._id,
           role: req.user.role,
           name: req.user.name,
           leftAt: new Date(),
-        });
+        };
+
+        await emitToRealtimeRoom(roomId, 'webrtc:peer-left', payload);
+        await emitToRealtimeRoom(roomId, 'peerLeft', payload);
       }
     } catch (socketErr) {
-        console.warn(`[consultations] Leave signal failed: ${socketErr.message}`);
+      console.warn(`[consultations] Realtime leave signal failed: ${socketErr.message}`);
     }
 
     return success(res, { message: 'Call leave acknowledged' }, 202);
@@ -238,11 +239,9 @@ exports.acceptConsultation = async (req, res, next) => {
     // 🔔 Notify patient that doctor accepted
     if (!alreadyActive) {
       try {
-        const { emitToUser } = require('../socket/handlers');
-        const io = require('../socket/ioInstance').get();
         const patientUserId = consultation.patient?.userId?._id || consultation.patient?.userId;
-        if (io && patientUserId) {
-          emitToUser(io, patientUserId, 'consultationAccepted', {
+        if (patientUserId) {
+          await emitToRealtimeUser(patientUserId, 'consultationAccepted', {
             consultationId: consultation._id,
             doctorName: consultation.doctor?.userId?.name || 'Your doctor',
           });
@@ -256,7 +255,7 @@ exports.acceptConsultation = async (req, res, next) => {
           params: { consultationId: consultation._id },
         });
       } catch (socketErr) {
-        console.warn(`[consultations] Accept notification failed: ${socketErr.message}`);
+        console.warn(`[consultations] Realtime accept notification failed: ${socketErr.message}`);
       }
     }
 
@@ -306,11 +305,9 @@ exports.endConsultation = async (req, res, next) => {
 
     if (wasActive) {
       try {
-        const ioModule = getIO();
-        const io = ioModule?.get ? ioModule.get() : ioModule;
         const roomId = consultation.roomId || consultation._id.toString();
 
-        if (io && roomId) {
+        if (roomId) {
           const payload = {
             consultationId: consultation._id,
             roomId,
@@ -322,8 +319,8 @@ exports.endConsultation = async (req, res, next) => {
             endedAt: consultation.endedAt,
           };
 
-          io.to(roomId).emit(SOCKET_EVENTS.CONSULTATION_ENDED, payload);
-          io.to(roomId).emit('webrtc:call-ended', payload);
+          await emitToRealtimeRoom(roomId, SOCKET_EVENTS.CONSULTATION_ENDED, payload);
+          await emitToRealtimeRoom(roomId, 'webrtc:call-ended', payload);
         }
 
         const patientUserId = populated.patient?.userId?._id || populated.patient?.userId;
@@ -339,7 +336,7 @@ exports.endConsultation = async (req, res, next) => {
           params: { consultationId: consultation._id },
         });
       } catch (socketErr) {
-        console.warn(`[consultations] End notification failed: ${socketErr.message}`);
+        console.warn(`[consultations] Realtime end notification failed: ${socketErr.message}`);
       }
     }
 

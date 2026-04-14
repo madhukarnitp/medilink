@@ -1,3 +1,4 @@
+if (false) {
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Doctor = require('../models/Doctor');
@@ -525,4 +526,11 @@ const emitToUser = (io, userId, event, data) => {
   }
 };
 
-module.exports = { registerSocketHandlers, isUserOnline, emitToUser };
+}
+
+// Deprecated: Socket.IO now runs from realtime-server/.
+module.exports = {
+  emitToUser: () => false,
+  isUserOnline: () => false,
+  registerSocketHandlers: () => {},
+};

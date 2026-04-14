@@ -10,6 +10,9 @@ import "./styles/globals.css";
 const Login = lazy(() => import("./components/pages/Login"));
 const Dashboard = lazy(() => import("./components/pages/Dashboard"));
 const DoctorDashboard = lazy(() => import("./components/pages/DoctorDashboard"));
+const DoctorPatients = lazy(() => import("./components/pages/DoctorPatients"));
+const PatientVitals = lazy(() => import("./components/pages/PatientVitals"));
+const PatientReports = lazy(() => import("./components/pages/PatientReports"));
 const DoctorList = lazy(() => import("./components/pages/DoctorList"));
 const Consultation = lazy(() => import("./components/pages/Consultation"));
 const Appointments = lazy(() => import("./components/pages/Appointments"));
@@ -58,9 +61,13 @@ const adminPages = {
 
 const doctorPages = {
   [PAGES.DOCTOR_DASHBOARD]: DoctorDashboard,
+  [PAGES.DOCTOR_PATIENTS]: DoctorPatients,
+  [PAGES.PATIENT_VITALS]: PatientVitals,
+  [PAGES.PATIENT_REPORTS]: PatientReports,
   [PAGES.CREATE_PRESCRIPTION]: CreatePrescription,
   [PAGES.DOCTOR_PRESCRIPTIONS]: DoctorPrescriptions,
   [PAGES.CONSULTATION]: Consultation,
+  [PAGES.CONSULTATION_LIST]: ConsultationList,
   [PAGES.APPOINTMENTS]: Appointments,
   [PAGES.PRESCRIPTION]: Prescription,
   [PAGES.PRESCRIPTION_VERIFY]: Prescription,

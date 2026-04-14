@@ -22,6 +22,12 @@ const PATIENT_NAV_ITEMS = [
     icon: MessageIcon,
   },
   {
+    page: PAGES.CONSULTATION_LIST,
+    label: "Consultation Records",
+    mobileLabel: "Records",
+    icon: FileIcon,
+  },
+  {
     page: PAGES.APPOINTMENTS,
     label: "Appointments",
     mobileLabel: "Visits",
@@ -54,6 +60,12 @@ const DOCTOR_NAV_ITEMS = [
     label: "New Prescription",
     mobileLabel: "New Rx",
     icon: PlusIcon,
+  },
+  {
+    page: PAGES.DOCTOR_PATIENTS,
+    label: "My Patients",
+    mobileLabel: "Patients",
+    icon: UserIcon,
   },
   {
     page: PAGES.DOCTOR_PRESCRIPTIONS,
