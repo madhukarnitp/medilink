@@ -17,7 +17,12 @@ const { createPrescriptionVerificationToken } = require('./utils/prescriptionVer
 // ── App setup ─────────────────────────────────────────────────────────────────
 const app = express();
 app.disable('etag');
+
+// IMPORTANT: Render runs behind a proxy
+app.set('trust proxy', 1);
+
 let server = null;
+let appStartedAt = Date.now();
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 const authRoutes = require('./routes/auth');
@@ -60,24 +65,6 @@ app.use(cors({
   credentials: true,
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX) || 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many requests — please try again later' },
-  skip: (req) => req.path === '/api/health',
-});
-app.use(limiter);
-
-// Stricter limit for auth endpoints
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
-  message: { success: false, message: 'Too many auth attempts — please try again in 15 minutes' },
-});
-
 // ── Body & sanitization ───────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -95,23 +82,55 @@ app.use('/api', (req, res, next) => {
 // ── Request logging ───────────────────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('combined', {
-    stream: { write: (msg) => console.log(msg) },
-    skip: (req) => req.path === '/api/health',
+    stream: { write: (msg) => console.log(msg.trim()) },
+    skip: (req) => req.path === '/api/health' || req.path === '/api/warmup',
   }));
 }
 
-// ── Health check ──────────────────────────────────────────────────────────────
+// ── Health / warmup ───────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
+    startupMs: Date.now() - appStartedAt,
     db: getDatabaseStatus(),
     environment: process.env.NODE_ENV || 'development',
   });
 });
 
+// lightweight endpoint for external uptime pings
+app.get('/api/warmup', async (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'warm',
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+  });
+});
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests — please try again later' },
+  skip: (req) => req.path === '/api/health' || req.path === '/api/warmup',
+});
+
+app.use(limiter);
+
+// Stricter limit for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many auth attempts — please try again in 15 minutes' },
+  skip: (req) => req.path === '/api/health' || req.path === '/api/warmup',
+});
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes);
@@ -140,9 +159,7 @@ const redirectToPrescriptionVerification = async (req, res, next) => {
 };
 
 app.get('/prescription/:id', redirectToPrescriptionVerification);
-
 app.get('/verify/prescription/:id', redirectToPrescriptionVerification);
-
 app.get('/verify/rx/:id', redirectToPrescriptionVerification);
 
 app.get('/consultation/:id', (req, res) => {
@@ -168,7 +185,7 @@ const shutdown = async (signal) => {
       console.log('[server] HTTP server closed');
       process.exit(0);
     });
-    setTimeout(() => process.exit(1), 10000); // force after 10s
+    setTimeout(() => process.exit(1), 10000);
     return;
   }
 
@@ -177,26 +194,31 @@ const shutdown = async (signal) => {
 };
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT',  () => shutdown('SIGINT'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('unhandledRejection', (err) => {
   console.error(`[process] Unhandled rejection: ${err.message}`);
   shutdown('unhandledRejection');
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-const PORT = parseInt(process.env.PORT) || 5001;
+const PORT = parseInt(process.env.PORT, 10) || 5001;
 
 if (require.main === module) {
   initializeServer();
+
   connectDatabase().then(() => {
     server.listen(PORT, () => {
       const env = process.env.NODE_ENV || 'development';
       console.log(`[server] MediLink API started in ${env} mode`);
       console.log(`[server] Local API: http://localhost:${PORT}/api`);
       console.log(`[server] Health check: http://localhost:${PORT}/api/health`);
+      console.log(`[server] Warmup check: http://localhost:${PORT}/api/warmup`);
       console.log(`[server] API docs: http://localhost:${PORT}/api-docs`);
       console.log('[server] Socket.IO is handled by the separate realtime server');
     });
+  }).catch((err) => {
+    console.error('[server] Failed to connect database on startup:', err.message);
+    process.exit(1);
   });
 }
 
