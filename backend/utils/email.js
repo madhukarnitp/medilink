@@ -1,14 +1,36 @@
 const nodemailer = require('nodemailer');
 
+const requiredEnv = ['EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USER', 'EMAIL_PASS'];
+
+const validateEmailEnv = () => {
+  const missing = requiredEnv.filter((key) => !process.env[key]);
+  if (missing.length) {
+    throw new Error(`Missing email environment variables: ${missing.join(', ')}`);
+  }
+};
+
 const createTransporter = () => {
+  validateEmailEnv();
+
+  const port = Number(process.env.EMAIL_PORT) || 587;
+
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST,
-    port: parseInt(process.env.EMAIL_PORT) || 587,
-    secure: parseInt(process.env.EMAIL_PORT) === 465,
+    port,
+    secure: port === 465, // 465 => true, 587 => false
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
+
+    // helpful on Render while debugging SMTP/network issues
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
+
+    // turn on only while debugging
+    logger: process.env.EMAIL_DEBUG === 'true',
+    debug: process.env.EMAIL_DEBUG === 'true',
   });
 };
 
@@ -18,10 +40,26 @@ const createTransporter = () => {
  */
 const sendEmail = async (options) => {
   if (process.env.NODE_ENV === 'test' || process.env.DISABLE_EMAIL === 'true') {
-    return { messageId: `email-disabled-${Date.now()}`, accepted: [options.to] };
+    return {
+      messageId: `email-disabled-${Date.now()}`,
+      accepted: [options.to],
+    };
+  }
+
+  if (!options?.to) {
+    throw new Error('Email recipient (to) is required');
+  }
+
+  if (!options?.subject) {
+    throw new Error('Email subject is required');
+  }
+
+  if (!options?.html && !options?.text) {
+    throw new Error('Either html or text content is required');
   }
 
   const transporter = createTransporter();
+
   const mailOptions = {
     from: process.env.EMAIL_FROM || `"Medilink" <${process.env.EMAIL_USER}>`,
     to: options.to,
@@ -31,11 +69,19 @@ const sendEmail = async (options) => {
   };
 
   try {
+    // verifies DNS, TCP, TLS/STARTTLS, and auth
+    await transporter.verify();
+
     const info = await transporter.sendMail(mailOptions);
+
     console.log(`[email] Message delivered to ${options.to}; id=${info.messageId}`);
     return info;
   } catch (err) {
-    console.error(`[email] Message delivery failed for ${options.to}: ${err.message}`);
+    console.error(`[email] Message delivery failed for ${options.to}`);
+    console.error('[email] message:', err.message);
+    console.error('[email] code:', err.code);
+    console.error('[email] response:', err.response);
+    console.error('[email] command:', err.command);
     throw err;
   }
 };
