@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Syne:wght@600;700&display=swap');
+@tailwind utilities;
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #F6FAFC;
+  --surface: #F8FBFF;
+  --card: #FFFFFF;
+  --card2: #EEF4F8;
+  --border: #DDE7EE;
+  --primary: #0F9F7F;
+  --primary-dim: rgba(15, 159, 127, 0.12);
+  --primary-border: rgba(15, 159, 127, 0.28);
+  --accent: #EF4444;
+  --accent-dim: rgba(37, 99, 235, 0.10);
+  --accent-border: rgba(37, 99, 235, 0.22);
+  --blue: #2563EB;
+  --blue-dim: rgba(37, 99, 235, 0.12);
+  --amber: #FBBF24;
+  --amber-dim: rgba(15, 159, 127, 0.10);
+  --text: #102033;
+  --muted: #5D6B7C;
+  --subtle: #B9C8D6;
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
+  --control-height: 38px;
+  --control-font-size: 12px;
+  --page-title-size: 22px;
+  --page-subtitle-size: 13px;
+  --section-title-size: 14px;
+  --card-padding: 14px;
+  --main-content-max: 100%;
+  --page-gap: 10px;
+  --page-gap-lg: 12px;
+}
+
+body {
+  background:
+    linear-gradient(135deg, rgba(15, 159, 127, 0.08), transparent 34%),
+    linear-gradient(225deg, rgba(37, 99, 235, 0.07), transparent 32%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: var(--font-body);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  font-size: var(--control-font-size);
+}
+
+input, select, textarea {
+  font-family: var(--font-body);
+  font-size: 13px;
+  outline: none;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* Light theme */
+.light-theme {
+  --bg: #FFFFFF;
+  --surface: #F8F9FA;
+  --card: #FFFFFF;
+  --primary: #007BFF;
+  --accent: #DC3545;
+  --text: #212529;
+  --muted: #6C757D;
+}
+
+/* Dark theme (current) */
+.dark-theme {
+  --bg: #0D0F12;
+  --surface: #161A1F;
+  --card: #1C2128;
+  --primary: #3ECF8E;
+  --accent: #FF4D6D;
+  --text: #E8ECF0;
+  --muted: #7A8694;
+}
+
+@media (max-width: 980px) {
+  [data-mobile-sidebar="admin"] {
+    transform: translateX(calc(-100% - 16px));
+    transition: transform 0.25s ease;
+  }
+
+  [data-mobile-sidebar="admin"][data-open="true"] {
+    transform: translateX(0) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  [data-mobile-sidebar="app"] {
+    transform: translateX(calc(-100% - 16px));
+    transition: transform 0.25s ease;
+  }
+
+  [data-mobile-sidebar="app"][data-open="true"] {
+    transform: translateX(0) !important;
+  }
+
+  [data-mobile-toggle] {
+    touch-action: manipulation;
+  }
+}
+
