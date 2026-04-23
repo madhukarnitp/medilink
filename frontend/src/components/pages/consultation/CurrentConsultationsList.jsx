@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PAGES } from "../../../context/AppContext";
 import { doctors as doctorsApi, patients as patientsApi } from "../../../services/api";
-import { Button, ErrorMsg, Spinner } from "../../ui/UI";
+import { Button, ErrorMsg, InlineSkeleton } from "../../ui/UI";
 
 const CURRENT_STATUSES = new Set(["pending", "active"]);
 
@@ -63,9 +63,7 @@ export default function CurrentConsultationsList({ isCallBusy = false, navigate,
 
   if (loading) {
     return (
-      <div className="flex justify-center p-8">
-        <Spinner size={36} />
-      </div>
+      <InlineSkeleton className="min-h-[260px] p-8" lines={5} showAvatar />
     );
   }
 

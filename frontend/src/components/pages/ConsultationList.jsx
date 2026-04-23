@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
-import { Button, Spinner, ErrorMsg } from "../ui/UI";
+import { Button, PageSkeleton, InlineSkeleton, ErrorMsg } from "../ui/UI";
 import {
   consultations as consultationsApi,
   doctors as doctorsApi,
@@ -123,9 +123,7 @@ export default function ConsultationList() {
   if (loading)
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
   if (error)
@@ -278,7 +276,7 @@ function ConsultationDetails({
     <div className={styles.detailPanel}>
       {detailLoading ? (
         <div className={styles.detailLoading}>
-          <Spinner size={24} />
+          <InlineSkeleton className="min-h-[220px]" lines={5} showAvatar />
         </div>
       ) : (
         <>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { PAGES, useApp } from "../../context/AppContext";
-import { Spinner, ErrorMsg } from "../ui/UI";
+import { InlineSkeleton, ErrorMsg } from "../ui/UI";
 import ChatPanel from "./consultation/ChatPanel";
 import ConsultationHeader from "./consultation/ConsultationHeader";
 import CurrentConsultationsList from "./consultation/CurrentConsultationsList";
@@ -200,9 +200,7 @@ function ConsultationRoom({
   if (session.loading)
     return (
       <div className="flex flex-col gap-4">
-        <div className="flex justify-center p-8">
-          <Spinner size={36} />
-        </div>
+        <InlineSkeleton className="min-h-[320px] p-8" lines={6} showAvatar />
       </div>
     );
   if (session.error && !session.consultation)

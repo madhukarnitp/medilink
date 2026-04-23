@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
-import { Button, ErrorMsg, Spinner } from "../ui/UI";
+import { Button, ErrorMsg, PageSkeleton } from "../ui/UI";
 import { doctors as doctorsApi, resolveAssetUrl } from "../../services/api";
 import { doctorPatientsStyles as styles } from "../../styles/tailwindStyles";
 
@@ -109,9 +109,7 @@ export default function DoctorPatients() {
   if (loading) {
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
   }

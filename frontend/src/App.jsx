@@ -7,6 +7,7 @@ import DoctorShell from "./components/layout/DoctorShell";
 import AdminShell from "./components/layout/AdminShell";
 import IncomingCallNotice from "./components/layout/IncomingCallNotice";
 import Toast from "./components/ui/Toast";
+import { FullPageSkeleton, PageSkeleton } from "./components/ui/UI";
 import { startKeepAlive, stopKeepAlive } from "./services/keepAlive";
 import "./styles/globals.css";
 
@@ -46,11 +47,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const loadingFallback = (
-  <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
-    <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--border)] border-t-[var(--primary)]" />
-  </div>
-);
+const loadingFallback = <PageSkeleton />;
 
 const adminPages = {
   [PAGES.ADMIN_DASHBOARD]: AdminDashboard,
@@ -126,12 +123,7 @@ function AppContent() {
     toasts,
     user,
   } = useApp();
-  if (loading)
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--border)] border-t-[var(--primary)]" />
-      </div>
-    );
+  if (loading) return <FullPageSkeleton />;
   const isVerificationPage =
     activePage === PAGES.PRESCRIPTION_VERIFY &&
     (selectedPrescriptionId || pageParams?.prescriptionId);

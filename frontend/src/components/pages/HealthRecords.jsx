@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Spinner } from "../ui/UI";
+import { PageSkeleton } from "../ui/UI";
 import {
   patients as patientsApi,
   prescriptionCache,
@@ -209,9 +209,7 @@ export default function HealthRecords() {
       </div>
 
       {loading ? (
-        <div className={styles.loadingWrap}>
-          <Spinner size={32} />
-        </div>
+        <PageSkeleton />
       ) : error ? (
         <div className={styles.empty}>
           <strong>Unable to load records</strong>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { admin as adminApi } from "../../services/api";
-import { Button, ErrorMsg, Spinner } from "../ui/UI";
+import { Button, ErrorMsg, PageSkeleton, InlineSkeleton } from "../ui/UI";
 import { adminDashboardStyles as styles } from "../../styles/tailwindStyles";
 
 const USER_FILTERS = ["all", "patient", "doctor", "admin"];
@@ -89,9 +89,7 @@ export default function AdminUsers() {
   if (loading) {
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
   }
@@ -337,9 +335,7 @@ function UserDetailsPanel({
         </div>
 
         {loading ? (
-          <div className={styles.loadingWrap}>
-            <Spinner size={28} />
-          </div>
+          <InlineSkeleton className="min-h-[240px]" lines={6} showAvatar />
         ) : (
           <>
             <div className={styles.detailsHero}>

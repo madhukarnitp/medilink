@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
-import { Button, ErrorMsg, Spinner, Modal } from "../ui/UI";
+import { Button, ErrorMsg, PageSkeleton, Modal } from "../ui/UI";
 import { vitals as vitalsApi } from "../../services/api";
 import { patientVitalsStyles as styles } from "../../styles/tailwindStyles";
 
@@ -97,9 +97,7 @@ export default function PatientVitals() {
   if (loading) {
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
   }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
-import { Button, Spinner, ErrorMsg } from "../ui/UI";
+import { Button, PageSkeleton, ErrorMsg } from "../ui/UI";
 import {
   prescriptions as rxApi,
   prescriptionCache,
@@ -65,9 +65,7 @@ export default function DoctorPrescriptions() {
   if (loading)
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
   if (error)

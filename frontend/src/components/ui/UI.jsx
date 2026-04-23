@@ -135,6 +135,83 @@ export function Spinner({ size = 28 }) {
   );
 }
 
+export function SkeletonBlock({ className = "" }) {
+  return <div aria-hidden="true" className={`med-skeleton-block ${className}`} />;
+}
+
+export function InlineSkeleton({
+  className = "",
+  lines = 4,
+  showAvatar = false,
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`med-skeleton-panel flex min-w-0 flex-col gap-3 p-4 ${className}`}
+    >
+      <div className="flex items-center gap-3">
+        {showAvatar ? <SkeletonBlock className="h-11 w-11 shrink-0 rounded-med" /> : null}
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <SkeletonBlock className="h-4 w-32 max-w-[45%]" />
+          <SkeletonBlock className="h-3 w-48 max-w-[65%]" />
+        </div>
+      </div>
+      <div className="flex flex-col gap-2">
+        {Array.from({ length: lines }).map((_, index) => (
+          <SkeletonBlock
+            className={`h-3 ${index === lines - 1 ? "w-2/3" : "w-full"}`}
+            key={index}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function PageSkeleton({ className = "" }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`med-skeleton-page flex w-full min-w-0 flex-col gap-4 ${className}`}
+    >
+      <div className="med-skeleton-panel p-5 max-[560px]:p-4">
+        <SkeletonBlock className="mb-3 h-3 w-24 max-w-[30%]" />
+        <SkeletonBlock className="mb-3 h-8 w-full max-w-[320px]" />
+        <SkeletonBlock className="h-4 w-full max-w-[640px]" />
+        <SkeletonBlock className="mt-2 h-4 w-4/5 max-w-[480px]" />
+      </div>
+
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div className="med-skeleton-panel p-4" key={index}>
+            <SkeletonBlock className="h-3 w-20" />
+            <SkeletonBlock className="mt-3 h-9 w-24" />
+            <SkeletonBlock className="mt-4 h-3 w-28" />
+          </div>
+        ))}
+      </div>
+
+      <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.85fr)]">
+        <InlineSkeleton className="min-h-[320px]" lines={6} showAvatar />
+        <div className="flex min-w-0 flex-col gap-3">
+          <InlineSkeleton className="min-h-[150px]" lines={3} />
+          <InlineSkeleton className="min-h-[150px]" lines={4} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function FullPageSkeleton() {
+  return (
+    <div className="min-h-screen bg-[var(--bg)] px-4 py-4 sm:px-5">
+      <div className="mx-auto flex w-full max-w-[var(--main-content-max)] min-w-0">
+        <PageSkeleton className="min-h-[calc(100vh-2rem)]" />
+      </div>
+    </div>
+  );
+}
+
 export function ErrorMsg({ message, onRetry }) {
   return (
     <div className={styles.errorMsg}>

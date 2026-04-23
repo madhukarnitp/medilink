@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
-import { StatCard, SectionHeader, Spinner, ErrorMsg } from "../ui/UI";
+import { StatCard, SectionHeader, PageSkeleton, ErrorMsg } from "../ui/UI";
 import { patients as patientsApi } from "../../services/api";
 import { dashboardStyles as styles } from "../../styles/tailwindStyles";
 
@@ -104,9 +104,7 @@ export default function Dashboard() {
   if (loading)
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
   if (error)

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
-import { Button, StatCard, Spinner, ErrorMsg } from "../ui/UI";
+import { Button, StatCard, PageSkeleton, ErrorMsg } from "../ui/UI";
 import { doctors as doctorsApi } from "../../services/api";
 import { doctorDashboardStyles as styles } from "../../styles/tailwindStyles";
 
@@ -29,9 +29,7 @@ export default function DoctorDashboard() {
   if (loading)
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
   if (error)

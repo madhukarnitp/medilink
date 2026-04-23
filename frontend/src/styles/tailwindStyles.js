@@ -67,6 +67,16 @@ const dangerButton =
   "inline-flex min-h-[38px] items-center justify-center gap-2 rounded-med border border-[var(--accent-border)] bg-[var(--accent-dim)] px-4 py-2 text-[12px] font-bold text-[var(--accent)] transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60";
 const logoutButton =
   "inline-flex min-h-[38px] items-center justify-center gap-2 rounded-med border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-[12px] font-bold text-[var(--accent)] transition hover:bg-[var(--card2)] disabled:cursor-not-allowed disabled:opacity-60 [&_svg]:text-[var(--accent)]";
+const filterPanel =
+  "flex flex-wrap items-center gap-2 overflow-x-auto rounded-med border border-[var(--border)] bg-[var(--card)] p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+const filterChip =
+  "shrink-0 rounded-med border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[12px] font-bold text-[var(--muted)] transition hover:border-[var(--primary-border)] hover:text-[var(--text)]";
+const recordCard =
+  "min-w-0 overflow-hidden rounded-med border border-[var(--border)] bg-[var(--card)] shadow-[0_8px_24px_rgba(16,32,51,0.05)]";
+const recordCardHeader =
+  "flex min-w-0 flex-col gap-2 border-b border-[var(--border)] p-3 sm:flex-row sm:items-start sm:justify-between";
+const recordCardActions =
+  "flex flex-wrap items-center justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface)] p-3 max-[640px]:justify-stretch [&_button]:min-h-[38px] [&_button]:max-w-full max-[640px]:[&_button]:w-full";
 
 const baseStyles = {
   page,
@@ -1082,18 +1092,44 @@ export const doctorListStyles = createStyles({
 });
 export const doctorPatientsStyles = createStyles({
   ...doctorPatientsGeneratedStyles,
+  page,
   header,
 });
 export const doctorPrescriptionsStyles = createStyles({
   ...doctorPrescriptionsGeneratedStyles,
+  page,
   header,
+  filterBar: filterPanel,
+  filterBtn: filterChip,
+  card: recordCard,
+  cardHeader: recordCardHeader,
+  diagnosis: "break-words font-display text-[16px] font-bold text-[var(--text)]",
+  meta: "text-[12px] leading-relaxed text-[var(--muted)]",
+  cardContent:
+    "grid min-w-0 grid-cols-1 gap-3 p-3 md:grid-cols-[minmax(0,1fr)_220px]",
+  actions: recordCardActions,
 });
 export const consultationListStyles = createStyles({
   ...consultationListGeneratedStyles,
+  page,
   header,
+  filterBar: filterPanel,
+  filterBtn: filterChip,
+  list: "flex min-w-0 flex-col gap-3",
+  card: recordCard,
+  cardHeader: recordCardHeader,
+  title: "break-words font-display text-[15px] font-bold text-[var(--text)]",
+  meta: "break-words text-[12px] leading-relaxed text-[var(--muted)]",
+  actions: "flex flex-wrap items-center justify-end gap-2 p-3",
+  detailPanel:
+    "border-t border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4",
+  detailGrid: "grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3",
+  detailItem:
+    "rounded-med border border-[var(--border)] bg-[var(--card)] p-3 [&_span]:block [&_span]:text-[11px] [&_span]:font-black [&_span]:uppercase [&_span]:tracking-[0.06em] [&_span]:text-[var(--muted)] [&_strong]:mt-1 [&_strong]:block [&_strong]:text-[13px] [&_strong]:font-bold [&_strong]:leading-relaxed [&_strong]:text-[var(--text)]",
 });
 export const createPrescriptionStyles = createStyles({
   ...createPrescriptionGeneratedStyles,
+  page,
   header: merge(header, "max-[900px]:flex-col"),
   steps:
     "flex min-w-0 items-center gap-2 overflow-x-auto rounded-med border border-[var(--border)] bg-[var(--surface)] p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[520px]:w-full",
@@ -1184,19 +1220,31 @@ export const prescriptionStyles = createStyles({
   tableWrap:
     "min-w-0 overflow-x-auto p-4 max-[620px]:overflow-visible max-[560px]:p-3",
   table:
-    "min-w-[720px] w-full border-collapse text-left text-[12px] [&_th]:bg-[var(--surface)] [&_th]:px-3 [&_th]:py-3 [&_th]:font-black [&_td]:border-t [&_td]:border-[var(--border)] [&_td]:px-3 [&_td]:py-3",
+    merge(
+      baseStyles.table,
+      "min-w-[720px] table-fixed [&_th:last-child]:w-[32%] [&_td]:align-top [&_td]:break-words [&_td:last-child]:whitespace-pre-wrap max-[620px]:table-auto max-[620px]:[&_td:nth-child(5)::before]:content-['Instructions']",
+    ),
+  instructionsText:
+    "text-[13px] leading-relaxed text-[var(--text)] break-words whitespace-pre-wrap",
+  notesText:
+    "text-[13px] leading-relaxed text-[var(--text)] break-words whitespace-pre-wrap",
   actions:
     "!flex flex-wrap items-center justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface)] p-3 max-[680px]:justify-stretch [&_button]:min-h-[38px] [&_button]:max-w-full max-[680px]:[&_button]:w-full",
 });
 export const prescriptionListStyles = createStyles({
   ...prescriptionListGeneratedStyles,
+  page,
   header,
+  filterBar: filterPanel,
+  filterBtn: filterChip,
   prescriptionsList: "grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-2",
   card:
     "min-w-0 overflow-hidden rounded-med border border-[var(--border)] bg-[var(--card)] shadow-[0_8px_24px_rgba(16,32,51,0.05)] transition hover:border-[var(--primary-border)]",
   cardHeader:
     "flex min-w-0 items-start justify-between gap-3 border-b border-[var(--border)] p-3 max-[640px]:flex-col",
   cardContent: "min-w-0 p-3",
+  instructions:
+    "m-3 rounded-med border border-amber-200 bg-amber-50 p-3 text-[12px] leading-relaxed text-amber-900 break-words whitespace-pre-wrap",
   actions:
     "flex flex-wrap items-center justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface)] p-3 max-[640px]:justify-stretch [&_button]:min-h-[38px] [&_button]:max-w-full max-[640px]:[&_button]:w-full",
 });

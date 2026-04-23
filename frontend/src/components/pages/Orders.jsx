@@ -1,5 +1,5 @@
 import { useApp } from "../../context/AppContext";
-import { ErrorMsg, Spinner } from "../ui/UI";
+import { ErrorMsg, PageSkeleton } from "../ui/UI";
 import { ordersStyles as styles } from "../../styles/tailwindStyles";
 import FulfillmentSelector from "./orders/FulfillmentSelector";
 import OrderSummaryCard from "./orders/OrderSummaryCard";
@@ -16,9 +16,7 @@ export default function Orders() {
   if (order.loading)
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
 

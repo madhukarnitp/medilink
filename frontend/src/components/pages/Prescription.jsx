@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { getHomePage, useApp, PAGES } from "../../context/AppContext";
-import { Button, Spinner, ErrorMsg } from "../ui/UI";
+import { Button, PageSkeleton, ErrorMsg } from "../ui/UI";
 import {
   prescriptions as rxApi,
   patients as patientsApi,
@@ -281,9 +281,7 @@ export default function Prescription() {
   if (loading)
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
   if (error && !rx && (isVerificationView || isPublicDetailView))
@@ -549,11 +547,13 @@ export default function Prescription() {
             <tbody>
               {(rx.medicines || []).map((m, i) => (
                 <tr key={i}>
-                  <td>{m.name}</td>
-                  <td>{m.dosage}</td>
-                  <td>{m.frequency}</td>
-                  <td>{m.duration}</td>
-                  <td>{m.instructions || "—"}</td>
+                  <td className="break-words">{m.name}</td>
+                  <td className="break-words">{m.dosage}</td>
+                  <td className="break-words">{m.frequency}</td>
+                  <td className="break-words">{m.duration}</td>
+                  <td className="break-words whitespace-pre-wrap">
+                    {m.instructions || "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -564,7 +564,9 @@ export default function Prescription() {
           {rx.advice && (
             <div className={styles.instructions}>
               <div className={styles.instructionsLabel}>Instructions</div>
-              <div className={styles.instructionsText}>{rx.advice}</div>
+              <div className={`${styles.instructionsText} break-words whitespace-pre-wrap`}>
+                {rx.advice}
+              </div>
             </div>
           )}
           {rx.followUpDate && (

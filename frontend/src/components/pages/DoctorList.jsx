@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
-import { StatusBadge, Button, Spinner, ErrorMsg } from "../ui/UI";
+import { StatusBadge, Button, PageSkeleton, ErrorMsg } from "../ui/UI";
 import { doctors as doctorsApi } from "../../services/api";
 import { doctorListStyles as styles } from "../../styles/tailwindStyles";
 
@@ -213,9 +213,7 @@ export default function DoctorList() {
         </span>
       </div>
       {loading ? (
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       ) : error ? (
         <ErrorMsg message={error} onRetry={load} />
       ) : (

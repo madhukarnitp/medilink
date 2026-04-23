@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
-import { Button, Spinner } from "../ui/UI";
+import { Button, InlineSkeleton } from "../ui/UI";
 import {
   prescriptions as rxApi,
   doctors as doctorsApi,
@@ -167,7 +167,7 @@ export default function CreatePrescription() {
               />
             </div>
             {loadingPatients ? (
-              <Spinner />
+              <InlineSkeleton className="min-h-[260px]" lines={6} showAvatar />
             ) : (
               <div className={styles.patientList}>
                 {filtered.length === 0 ? (

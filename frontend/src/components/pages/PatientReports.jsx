@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
-import { Button, ErrorMsg, Spinner, Modal } from "../ui/UI";
+import { Button, ErrorMsg, PageSkeleton, Modal } from "../ui/UI";
 import { reports as reportsApi } from "../../services/api";
 import { patientReportsStyles as styles } from "../../styles/tailwindStyles";
 
@@ -89,9 +89,7 @@ export default function PatientReports() {
   if (loading) {
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
   }

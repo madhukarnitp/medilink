@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getHomePage, useApp } from "../../context/AppContext";
-import { Button, Spinner, ErrorMsg } from "../ui/UI";
+import { Button, PageSkeleton, ErrorMsg } from "../ui/UI";
 import {
   auth as authApi,
   patients as patientsApi,
@@ -147,9 +147,7 @@ export default function Profile() {
   if (loading)
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
 

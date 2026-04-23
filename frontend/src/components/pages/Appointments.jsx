@@ -4,7 +4,7 @@ import {
   appointments as appointmentsApi,
   doctors as doctorsApi,
 } from "../../services/api";
-import { Button, ErrorMsg, Spinner } from "../ui/UI";
+import { Button, ErrorMsg, PageSkeleton } from "../ui/UI";
 import { appointmentsStyles as styles } from "../../styles/tailwindStyles";
 
 const nextSlotValue = () => {
@@ -133,9 +133,7 @@ export default function Appointments() {
   if (loading) {
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
   }

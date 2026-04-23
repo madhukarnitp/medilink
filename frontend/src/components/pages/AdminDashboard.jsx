@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useApp, PAGES } from "../../context/AppContext";
 import { admin as adminApi } from "../../services/api";
-import { Button, ErrorMsg, Spinner, StatCard } from "../ui/UI";
+import { Button, ErrorMsg, PageSkeleton, StatCard } from "../ui/UI";
 import { adminDashboardStyles as styles } from "../../styles/tailwindStyles";
 
 export default function AdminDashboard() {
@@ -57,9 +57,7 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div className={styles.page}>
-        <div className={styles.loadingWrap}>
-          <Spinner size={36} />
-        </div>
+        <PageSkeleton />
       </div>
     );
   }
