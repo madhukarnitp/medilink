@@ -74,6 +74,10 @@ export default function Profile() {
   const profileData =
     dashboardData?.patient || dashboardData?.doctor || contextProfile || {};
   const stats = dashboardData?.stats || {};
+  const recentReviews =
+    (isDoctor
+      ? dashboardData?.recentReviews || contextProfile?.recentReviews
+      : []) || [];
   const locationText = formatLocation(profileData, user);
   const avatarUrl =
     form?.avatarPreview || resolveAssetUrl(profileData.avatar || user?.avatar);
@@ -686,6 +690,60 @@ export default function Profile() {
               )}
             </div>
           </section>
+
+          {isDoctor ? (
+            <section className={styles.sectionCard}>
+              <h3 className={styles.sectionTitle}>Recent Patient Reviews</h3>
+              {recentReviews.length === 0 ? (
+                <div className={styles.emptyMini}>
+                  No patient reviews yet.
+                </div>
+              ) : (
+                <div className={styles.recordsList}>
+                  {recentReviews.map((review) => {
+                    const patientAvatar = resolveAssetUrl(review.patient?.avatar);
+                    return (
+                      <article
+                        className="rounded-med border border-[var(--border)] bg-[var(--surface)] p-3"
+                        key={review.id}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-med border border-[var(--border)] bg-[var(--primary-dim)] text-[12px] font-black text-[var(--primary)]">
+                              {patientAvatar ? (
+                                <img
+                                  alt={`${review.patient?.name || "Patient"} avatar`}
+                                  className="h-full w-full object-cover"
+                                  src={patientAvatar}
+                                />
+                              ) : (
+                                getInitials(review.patient?.name || "P")
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate font-bold text-[var(--text)]">
+                                {review.patient?.name || "Patient"}
+                              </div>
+                              <div className="text-[12px] text-[var(--muted)]">
+                                {formatReviewDate(review.createdAt)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="shrink-0 rounded-med bg-amber-50 px-2.5 py-1 text-[12px] font-black text-amber-700">
+                            {"★".repeat(review.rating)}
+                            {"☆".repeat(5 - review.rating)}
+                          </div>
+                        </div>
+                        <p className="mt-3 text-[13px] leading-relaxed text-[var(--muted)]">
+                          {review.comment || "Patient submitted a rating without a written review."}
+                        </p>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          ) : null}
         </div>
       </div>
     </div>
@@ -866,4 +924,25 @@ function calculateBmi(form) {
   if (!weight || !height) return "";
   const heightInMeters = height / 100;
   return Math.round((weight / (heightInMeters * heightInMeters)) * 10) / 10;
+}
+
+function formatReviewDate(value) {
+  if (!value) return "Recently";
+  return new Date(value).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function getInitials(name = "U") {
+  return (
+    name
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || "U"
+  );
 }

@@ -7,6 +7,13 @@ const { success, error, paginate } = require('../utils/apiResponse');
 const { CONSULTATION_STATUS, PAGINATION, SOCKET_EVENTS } = require('../utils/constants');
 const { sendSseToAll } = require('../utils/sseHub');
 const { emitToRealtimeBroadcast } = require('../utils/realtimeBridge');
+const {
+  attachDoctorReviewSummary,
+  attachDoctorReviewSummaries,
+  getDoctorReviewSummaryMap,
+  getRecentDoctorReviews,
+  syncDoctorReviewSummary,
+} = require('../utils/doctorReviews');
 
 /**
  * GET /api/doctors
@@ -22,20 +29,9 @@ exports.getAllDoctors = async (req, res, next) => {
     const filter = {};
     if (req.query.specialty) filter.specialization = req.query.specialty;
     if (req.query.online === 'true') filter.online = true;
-    if (req.query.minRating) filter.rating = { $gte: parseFloat(req.query.minRating) };
     if (req.query.maxPrice) filter.price = { ...(filter.price || {}), $lte: parseFloat(req.query.maxPrice) };
     if (req.query.minPrice) filter.price = { ...(filter.price || {}), $gte: parseFloat(req.query.minPrice) };
     if (req.query.verified === 'true') filter.isVerified = true;
-
-    // Sort
-    const sortMap = {
-      rating: { rating: -1 },
-      price_asc: { price: 1 },
-      price_desc: { price: -1 },
-      experience: { experience: -1 },
-      consultations: { consultationCount: -1 },
-    };
-    const sort = sortMap[req.query.sort] || { rating: -1 };
 
     if (req.query.search) {
       const regex = new RegExp(escapeRegex(req.query.search.trim()), 'i');
@@ -52,19 +48,22 @@ exports.getAllDoctors = async (req, res, next) => {
       ];
     }
 
-    let doctorQuery = Doctor.find(filter)
+    let doctors = await Doctor.find(filter)
       .populate('userId', 'name email avatar phone')
-      .sort(sort)
-      .skip(skip)
-      .limit(limit)
       .lean({ virtuals: true });
+    doctors = await attachDoctorReviewSummaries(doctors);
 
-    const [doctors, total] = await Promise.all([
-      doctorQuery,
-      Doctor.countDocuments(filter),
-    ]);
+    if (req.query.minRating) {
+      const minRating = parseFloat(req.query.minRating);
+      doctors = doctors.filter((doctor) => Number(doctor.rating || 0) >= minRating);
+    }
 
-    return paginate(res, doctors, total, page, limit);
+    doctors.sort(createDoctorSortComparator(req.query.sort));
+
+    const total = doctors.length;
+    const pageData = doctors.slice(skip, skip + limit);
+
+    return paginate(res, pageData, total, page, limit);
   } catch (err) {
     next(err);
   }
@@ -75,11 +74,13 @@ exports.getAllDoctors = async (req, res, next) => {
  */
 exports.getDoctorById = async (req, res, next) => {
   try {
-    const doctor = await Doctor.findById(req.params.id)
+    let doctor = await Doctor.findById(req.params.id)
       .populate('userId', 'name email avatar phone createdAt')
       .lean({ virtuals: true });
     if (!doctor) return error(res, 'Doctor not found', 404);
-    return success(res, doctor);
+    doctor = attachDoctorReviewSummary(doctor, await getDoctorReviewSummaryMap([doctor._id]));
+    const recentReviews = await getRecentDoctorReviews(doctor._id);
+    return success(res, { ...doctor, recentReviews });
   } catch (err) {
     next(err);
   }
@@ -90,10 +91,11 @@ exports.getDoctorById = async (req, res, next) => {
  */
 exports.getDoctorsBySpecialty = async (req, res, next) => {
   try {
-    const doctors = await Doctor.find({ specialization: req.params.specialty })
+    let doctors = await Doctor.find({ specialization: req.params.specialty })
       .populate('userId', 'name email avatar')
-      .sort({ rating: -1 })
       .lean({ virtuals: true });
+    doctors = await attachDoctorReviewSummaries(doctors);
+    doctors.sort(createDoctorSortComparator('rating'));
     return success(res, doctors);
   } catch (err) {
     next(err);
@@ -105,11 +107,13 @@ exports.getDoctorsBySpecialty = async (req, res, next) => {
  */
 exports.getOwnProfile = async (req, res, next) => {
   try {
-    const doctor = await Doctor.findOne({ userId: req.user._id })
+    let doctor = await Doctor.findOne({ userId: req.user._id })
       .populate('userId', 'name email avatar phone isEmailVerified createdAt')
       .lean({ virtuals: true });
     if (!doctor) return error(res, 'Doctor profile not found', 404);
-    return success(res, doctor);
+    doctor = attachDoctorReviewSummary(doctor, await getDoctorReviewSummaryMap([doctor._id]));
+    const recentReviews = await getRecentDoctorReviews(doctor._id);
+    return success(res, { ...doctor, recentReviews });
   } catch (err) {
     next(err);
   }
@@ -313,10 +317,11 @@ function escapeRegex(value) {
  */
 exports.getDashboard = async (req, res, next) => {
   try {
-    const doctor = await Doctor.findOne({ userId: req.user._id })
+    let doctor = await Doctor.findOne({ userId: req.user._id })
       .populate('userId', 'name avatar lastSeen')
       .lean({ virtuals: true });
     if (!doctor) return error(res, 'Doctor profile not found', 404);
+    doctor = attachDoctorReviewSummary(doctor, await getDoctorReviewSummaryMap([doctor._id]));
 
     const [total, active, completed, prescriptionsIssued] = await Promise.all([
       Consultation.countDocuments({ doctor: doctor._id }),
@@ -330,11 +335,13 @@ exports.getDashboard = async (req, res, next) => {
       .sort({ createdAt: -1 })
       .limit(5)
       .lean({ virtuals: true });
+    const recentReviews = await getRecentDoctorReviews(doctor._id);
 
     return success(res, {
       doctor,
       stats: { total, active, completed, prescriptionsIssued, rating: doctor.rating, ratingCount: doctor.ratingCount },
       recentConsultations,
+      recentReviews,
     });
   } catch (err) {
     next(err);
@@ -375,18 +382,42 @@ exports.addReview = async (req, res, next) => {
     await consultation.save();
 
     // Update doctor rating
-    await doctor.updateRating(rating);
+    const summary = await syncDoctorReviewSummary(doctor._id);
 
     return success(res, {
       message: 'Review submitted',
       review: consultation.review,
       doctor: {
         _id: doctor._id,
-        rating: doctor.rating,
-        ratingCount: doctor.ratingCount,
+        rating: summary.rating,
+        ratingCount: summary.ratingCount,
       },
     });
   } catch (err) {
     next(err);
   }
 };
+
+function createDoctorSortComparator(sortKey) {
+  switch (sortKey) {
+    case 'price_asc':
+      return (a, b) => Number(a.price || 0) - Number(b.price || 0);
+    case 'price_desc':
+      return (a, b) => Number(b.price || 0) - Number(a.price || 0);
+    case 'experience':
+      return (a, b) => Number(b.experience || 0) - Number(a.experience || 0);
+    case 'consultations':
+      return (a, b) =>
+        Number(b.consultationCount || 0) - Number(a.consultationCount || 0);
+    case 'rating':
+    default:
+      return (a, b) => {
+        const ratingDiff = Number(b.rating || 0) - Number(a.rating || 0);
+        if (ratingDiff !== 0) return ratingDiff;
+        const reviewDiff =
+          Number(b.ratingCount || 0) - Number(a.ratingCount || 0);
+        if (reviewDiff !== 0) return reviewDiff;
+        return String(a.userId?.name || '').localeCompare(String(b.userId?.name || ''));
+      };
+  }
+}

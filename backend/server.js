@@ -32,6 +32,7 @@ const appointmentRoutes = require('./routes/appointments');
 const vitalsRoutes = require('./routes/vitals');
 const reportsRoutes = require('./routes/reports');
 const aiRoutes = require('./routes/ai');
+const publicRoutes = require('./routes/public');
 
 // ── CORS helpers ──────────────────────────────────────────────────────────────
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
@@ -117,6 +118,7 @@ app.get('/api/health', (req, res) => {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/public', publicRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);

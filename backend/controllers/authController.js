@@ -7,6 +7,11 @@ const { sendEmail, emailTemplates } = require('../utils/email');
 const { ROLES, SOCKET_EVENTS } = require('../utils/constants');
 const { emitToRealtimeBroadcast } = require('../utils/realtimeBridge');
 const { sendSseToAll } = require('../utils/sseHub');
+const {
+  attachDoctorReviewSummary,
+  getDoctorReviewSummaryMap,
+  getRecentDoctorReviews,
+} = require('../utils/doctorReviews');
 
 const DEFAULT_CLIENT_URL = 'http://localhost:3000';
 
@@ -174,11 +179,20 @@ exports.getMe = async (req, res, next) => {
     if (req.user.role === ROLES.PATIENT) {
       profile = await Patient.findOne({ userId: req.user._id });
     } else if (req.user.role === ROLES.DOCTOR) {
-      profile = await Doctor.findOneAndUpdate(
+      const doctorProfile = await Doctor.findOneAndUpdate(
         { userId: req.user._id },
         { online: true },
         { new: true }
       );
+      profile = doctorProfile
+        ? attachDoctorReviewSummary(
+            doctorProfile.toObject(),
+            await getDoctorReviewSummaryMap([doctorProfile._id]),
+          )
+        : null;
+      if (profile) {
+        profile.recentReviews = await getRecentDoctorReviews(profile._id);
+      }
       sendSseToAll(SOCKET_EVENTS.DOCTOR_ONLINE, {
         doctorUserId: req.user._id,
         online: true,
@@ -218,7 +232,16 @@ exports.updateMe = async (req, res, next) => {
     if (user.role === ROLES.PATIENT) {
       profile = await Patient.findOne({ userId: user._id });
     } else if (user.role === ROLES.DOCTOR) {
-      profile = await Doctor.findOne({ userId: user._id });
+      const doctorProfile = await Doctor.findOne({ userId: user._id }).lean({ virtuals: true });
+      profile = doctorProfile
+        ? attachDoctorReviewSummary(
+            doctorProfile,
+            await getDoctorReviewSummaryMap([doctorProfile._id]),
+          )
+        : null;
+      if (profile) {
+        profile.recentReviews = await getRecentDoctorReviews(profile._id);
+      }
     }
 
     return success(res, { user: user.toSafeJSON(), profile });

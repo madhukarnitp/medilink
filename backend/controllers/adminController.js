@@ -5,6 +5,12 @@ const Order = require('../models/Order');
 const Medicine = require('../models/Medicine');
 const { success, error, paginate } = require('../utils/apiResponse');
 const { ROLES, PAGINATION } = require('../utils/constants');
+const {
+  attachDoctorReviewSummary,
+  attachDoctorReviewSummaries,
+  getDoctorReviewSummaryMap,
+  getRecentDoctorReviews,
+} = require('../utils/doctorReviews');
 
 const USER_SELECT =
   '-password -emailVerifyToken -emailVerifyExpire -emailVerifyCode -emailVerifyCodeExpire -resetPasswordToken -resetPasswordExpire';
@@ -63,13 +69,15 @@ exports.getUsers = async (req, res, next) => {
     ]);
 
     const userIds = users.map((user) => user._id);
-    const [patients, doctors] = await Promise.all([
+    const [patients, doctorProfiles] = await Promise.all([
       Patient.find({ userId: { $in: userIds } }).lean({ virtuals: true }),
       Doctor.find({ userId: { $in: userIds } }).lean({ virtuals: true }),
     ]);
     const profileByUserId = new Map();
     patients.forEach((profile) => profileByUserId.set(profile.userId.toString(), profile));
-    doctors.forEach((profile) => profileByUserId.set(profile.userId.toString(), profile));
+    (await attachDoctorReviewSummaries(doctorProfiles)).forEach((profile) =>
+      profileByUserId.set(profile.userId.toString(), profile),
+    );
 
     const usersWithProfiles = users.map((user) => ({
       ...user,
@@ -313,7 +321,16 @@ async function buildUserPayload(userId) {
   if (user.role === ROLES.PATIENT) {
     profile = await Patient.findOne({ userId: user._id }).lean({ virtuals: true });
   } else if (user.role === ROLES.DOCTOR) {
-    profile = await Doctor.findOne({ userId: user._id }).lean({ virtuals: true });
+    const doctorProfile = await Doctor.findOne({ userId: user._id }).lean({ virtuals: true });
+    profile = doctorProfile
+      ? attachDoctorReviewSummary(
+          doctorProfile,
+          await getDoctorReviewSummaryMap([doctorProfile._id]),
+        )
+      : null;
+    if (profile) {
+      profile.recentReviews = await getRecentDoctorReviews(profile._id);
+    }
   }
 
   return { user, profile };
