@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppProvider, useApp, PAGES } from "./context/AppContext";
@@ -7,6 +7,7 @@ import DoctorShell from "./components/layout/DoctorShell";
 import AdminShell from "./components/layout/AdminShell";
 import IncomingCallNotice from "./components/layout/IncomingCallNotice";
 import Toast from "./components/ui/Toast";
+import { startKeepAlive, stopKeepAlive } from "./services/keepAlive";
 import "./styles/globals.css";
 
 const Login = lazy(() => import("./components/pages/Login"));
@@ -109,6 +110,11 @@ function PageRouter() {
 }
 
 function AppContent() {
+  useEffect(() => {
+    startKeepAlive();
+    return () => stopKeepAlive();
+  }, []);
+
   const location = useLocation();
   const {
     activePage,
