@@ -8,11 +8,13 @@ const getTimeout = (name, fallback) => {
 };
 
 const getEmailConfig = () => {
-  const port = parseInt(process.env.EMAIL_PORT, 10) || 587;
+  const port = parseInt(process.env.EMAIL_PORT, 10) || 465;
   return {
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
     port,
-    secure: parseBool(process.env.EMAIL_SECURE) || port === 465,
+    secure: process.env.EMAIL_SECURE === undefined
+      ? port === 465
+      : parseBool(process.env.EMAIL_SECURE),
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
     from: process.env.EMAIL_FROM || `"Medilink" <${process.env.EMAIL_USER}>`,
