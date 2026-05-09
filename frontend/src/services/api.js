@@ -389,6 +389,18 @@ export const auth = {
       cacheTtlMs: 0,
       skipAuth: true,
     }),
+  forgotPassword: (email) =>
+    req("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+      skipAuth: true,
+    }),
+  resetPassword: (token, password) =>
+    req(`/auth/reset-password/${encodeURIComponent(token)}`, {
+      method: "PUT",
+      body: JSON.stringify({ password }),
+      skipAuth: true,
+    }),
   changePassword: (cur, nw) =>
     req("/auth/change-password", {
       method: "PUT",

@@ -4,7 +4,7 @@ const Doctor = require('../models/Doctor');
 const Patient = require('../models/Patient');
 const Consultation = require('../models/Consultation');
 const { success, error, paginate } = require('../utils/apiResponse');
-const { sendEmail, emailTemplates } = require('../utils/email');
+const { sendEmailInBackground, emailTemplates } = require('../utils/email');
 const { CONSULTATION_STATUS, PRESCRIPTION_STATUS, PAGINATION } = require('../utils/constants');
 const {
   addPublicVerification,
@@ -145,7 +145,7 @@ exports.createPrescription = async (req, res, next) => {
     // Email patient
     try {
       const tmpl = emailTemplates.prescriptionCreated(patient.userId.name, doctor.userId.name, diagnosis);
-      await sendEmail({ to: patient.userId.email, ...tmpl });
+      sendEmailInBackground({ to: patient.userId.email, ...tmpl }, 'prescriptions');
     } catch (emailErr) {
       console.warn(`[prescriptions] Prescription email delivery failed: ${emailErr.message}`);
     }

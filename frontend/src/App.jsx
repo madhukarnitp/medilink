@@ -17,6 +17,7 @@ import "./styles/globals.css";
 
 const Login = lazy(() => import("./pages/auth/Login"));
 const Register = lazy(() => import("./pages/auth/Register"));
+const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
 const DoctorDashboard = lazy(() => import("./pages/doctor/DoctorDashboard"));
 const DoctorPatients = lazy(() => import("./pages/doctor/DoctorPatients"));
@@ -143,13 +144,15 @@ function AppContent() {
   const isLoginUrl = rawRoute === "" || /^login(?:[/?#]|$)/i.test(rawRoute);
   const isRegisterUrl = /^register(?:[/?#]|$)/i.test(rawRoute);
   const isEmailVerificationUrl = /^verify-email\/[^/?#]+/i.test(rawRoute);
+  const isResetPasswordUrl = /^reset-password\/[^/?#]+/i.test(rawRoute);
   const isPublicPrescriptionUrl = /^prescription\/[^/?#]+/i.test(rawRoute);
   const isPublicError =
     !isAuthenticated &&
     activePage === PAGES.NOT_FOUND &&
     !isLoginUrl &&
     !isRegisterUrl &&
-    !isEmailVerificationUrl;
+    !isEmailVerificationUrl &&
+    !isResetPasswordUrl;
   const missingProfileFields = profileLoaded
     ? getMissingProfileFields(user, profile)
     : [];
@@ -175,11 +178,24 @@ function AppContent() {
     );
   }
 
+  if (isResetPasswordUrl) {
+    return (
+      <>
+        <Suspense fallback={loadingFallback}>
+          <ResetPassword />
+        </Suspense>
+        <Toast onDismiss={dismissToast} toasts={toasts} />
+      </>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <>
         <Suspense fallback={loadingFallback}>
-          {isRegisterUrl || isEmailVerificationUrl ? (
+          {isResetPasswordUrl ? (
+            <ResetPassword />
+          ) : isRegisterUrl || isEmailVerificationUrl ? (
             <Register />
           ) : isPublicError ? (
             <ErrorPage />

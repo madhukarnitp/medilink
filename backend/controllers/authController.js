@@ -3,7 +3,7 @@ const User = require('../models/User');
 const Patient = require('../models/Patient');
 const Doctor = require('../models/Doctor');
 const { success, error } = require('../utils/apiResponse');
-const { sendEmail, emailTemplates } = require('../utils/email');
+const { sendEmail, sendEmailInBackground, emailTemplates } = require('../utils/email');
 const { ROLES, SOCKET_EVENTS } = require('../utils/constants');
 const { emitToRealtimeBroadcast } = require('../utils/realtimeBridge');
 const { sendSseToAll } = require('../utils/sseHub');
@@ -25,14 +25,16 @@ const clearEmailVerificationState = (user) => {
   user.emailVerifyCodeExpire = undefined;
 };
 
-const sendVerificationEmail = async (user) => {
+const sendVerificationEmail = async (user, { background = false } = {}) => {
   const rawToken = user.generateEmailVerifyToken();
   const verificationCode = user.generateEmailVerifyCode();
   await user.save({ validateBeforeSave: false });
 
   const verifyUrl = `${getClientUrl()}/#/verify-email/${rawToken}`;
   const tmpl = emailTemplates.verifyEmail(user.name, verifyUrl, verificationCode);
-  await sendEmail({ to: user.email, ...tmpl });
+  const message = { to: user.email, ...tmpl };
+  if (background) return sendEmailInBackground(message, 'auth');
+  return sendEmail(message);
 };
 
 /**
@@ -67,7 +69,7 @@ exports.register = async (req, res, next) => {
 
     // Send verification email
     try {
-      await sendVerificationEmail(user);
+      await sendVerificationEmail(user, { background: true });
     } catch (emailErr) {
       console.warn(`[auth] Email verification delivery failed for ${email}: ${emailErr.message}`);
     }
@@ -294,7 +296,7 @@ exports.requestVerification = async (req, res, next) => {
     }
 
     try {
-      await sendVerificationEmail(user);
+      await sendVerificationEmail(user, { background: true });
     } catch (emailErr) {
       return error(res, 'Failed to send verification email. Try again later.', 500);
     }
@@ -377,11 +379,11 @@ exports.forgotPassword = async (req, res, next) => {
     const rawToken = user.generatePasswordResetToken();
     await user.save({ validateBeforeSave: false });
 
-    const resetUrl = `${getClientUrl()}/reset-password/${rawToken}`;
+    const resetUrl = `${getClientUrl()}/#/reset-password/${rawToken}`;
     const tmpl = emailTemplates.passwordReset(user.name, resetUrl);
 
     try {
-      await sendEmail({ to: user.email, ...tmpl });
+      sendEmailInBackground({ to: user.email, ...tmpl }, 'auth');
       return success(res, { message: 'Password reset email sent' });
     } catch (emailErr) {
       user.resetPasswordToken = undefined;

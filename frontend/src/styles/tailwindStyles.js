@@ -1878,6 +1878,8 @@ export const loginStyles = createStyles({
     "flex flex-col gap-2 [&_label]:text-[14px] [&_label]:font-semibold [&_label]:text-[#1a1a1a] [&_input]:min-h-[var(--control-height)] [&_input]:rounded-med [&_input]:border [&_input]:border-[#ddd] [&_input]:px-3 [&_input]:py-2 [&_input]:text-[13px] [&_input]:outline-none [&_input]:transition [&_input:focus]:border-[var(--primary)] [&_input:focus]:shadow-[0_0_0_3px_rgba(0,123,255,0.1)] [&_input:disabled]:cursor-not-allowed [&_input:disabled]:bg-[#f5f5f5] [&_input:disabled]:opacity-60 [&_select]:min-h-[var(--control-height)] [&_select]:w-full [&_select]:rounded-med [&_select]:border [&_select]:border-[#ddd] [&_select]:bg-white [&_select]:px-3 [&_select]:py-2 [&_select]:text-[13px] [&_select]:outline-none [&_select]:transition [&_select:focus]:border-[var(--primary)] [&_select:focus]:shadow-[0_0_0_3px_rgba(0,123,255,0.1)]",
   authSwitch:
     "mt-4 flex flex-wrap items-center justify-center gap-1.5 border-t border-[#e0e0e0] pt-4 text-[13px] text-[#666] [&_button]:bg-transparent [&_button]:p-0 [&_button]:text-[13px] [&_button]:font-bold [&_button]:text-[var(--primary)] [&_button:hover]:underline",
+  forgotPasswordBtn:
+    "self-end bg-transparent p-0 text-[13px] font-bold text-[var(--primary)] hover:underline disabled:cursor-not-allowed disabled:opacity-60",
   registerActions:
     "grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_220px]",
   loginBtn:

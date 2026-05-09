@@ -148,6 +148,7 @@ const getDeepLinkTarget = () => {
   if (parts[0] === "login") return null;
   if (parts[0] === "register") return null;
   if (parts[0] === "verify-email") return null;
+  if (parts[0] === "reset-password") return null;
 
   const query = new URLSearchParams(hashQuery || window.location.search);
   const queryParams = Object.fromEntries(query.entries());

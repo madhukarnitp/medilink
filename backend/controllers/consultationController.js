@@ -3,7 +3,7 @@ const Message = require('../models/Message');
 const Patient = require('../models/Patient');
 const Doctor = require('../models/Doctor');
 const { success, error, paginate } = require('../utils/apiResponse');
-const { sendEmail, emailTemplates } = require('../utils/email');
+const { sendEmailInBackground, emailTemplates } = require('../utils/email');
 const { CONSULTATION_STATUS, PAGINATION, SOCKET_EVENTS } = require('../utils/constants');
 const { createNotification } = require('../utils/notifications');
 const { emitToRealtimeRoom, emitToRealtimeUser } = require('../utils/realtimeBridge');
@@ -68,7 +68,7 @@ exports.startConsultation = async (req, res, next) => {
     // Notify doctor via email
     try {
       const tmpl = emailTemplates.consultationStarted(doctor.userId.name, patient.userId.name);
-      await sendEmail({ to: doctor.userId.email, ...tmpl });
+      sendEmailInBackground({ to: doctor.userId.email, ...tmpl }, 'consultations');
     } catch (emailErr) {
       console.warn(`[consultations] Consultation email delivery failed: ${emailErr.message}`);
     }

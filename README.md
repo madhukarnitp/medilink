@@ -362,12 +362,13 @@ MediLink/
 |   |   `-- notifications.js
 |   |-- package.json
 |   |-- package-lock.json
+|   |-- railway.json
 |   |-- README.md
 |   `-- server.js
 |-- .gitignore
+|-- DEPLOYMENT.md
 |-- package.json
 |-- package-lock.json
-|-- railway.json
 `-- README.md
 ```
 
@@ -806,9 +807,12 @@ docker compose --profile dev up -d
 
 > Deployment comment: Production deployment needs three public pieces: static frontend, API service, and realtime service. Keep allowed origins and service URLs aligned.
 
+See `DEPLOYMENT.md` for Render, Railway, and frontend hosting settings. The API and realtime server are intentionally deployed as separate services; there is no root Render/Railway service config.
+
 ### Backend API
 
 - Deploy `backend/` as a Node service.
+- On Railway, use `backend/` as the service root so `backend/railway.json` is used.
 - Set `MONGODB_URI`, `JWT_SECRET`, `ALLOWED_ORIGINS`, and `CLIENT_URL`.
 - Set `REALTIME_SERVER_URL` and `REALTIME_INTERNAL_SECRET` if using the realtime bridge.
 - Swagger is mounted by the API at `/api-docs`.
@@ -816,6 +820,7 @@ docker compose --profile dev up -d
 ### Realtime Server
 
 - Deploy `realtime-server/` as a separate Node service.
+- On Railway, use `realtime-server/` as the service root so `realtime-server/railway.json` is used.
 - Use the same `MONGODB_URI` and `JWT_SECRET` as the API.
 - Set `REALTIME_ALLOWED_ORIGINS` to the frontend domain.
 - Set `REALTIME_INTERNAL_SECRET` to match backend.

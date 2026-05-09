@@ -1,14 +1,41 @@
 const nodemailer = require('nodemailer');
 
-const createTransporter = () => {
-  return nodemailer.createTransport({
+const parseBool = (value) => String(value || '').toLowerCase() === 'true';
+
+const getTimeout = (name, fallback) => {
+  const value = parseInt(process.env[name], 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+
+const getEmailConfig = () => {
+  const port = parseInt(process.env.EMAIL_PORT, 10) || 587;
+  return {
     host: process.env.EMAIL_HOST,
-    port: parseInt(process.env.EMAIL_PORT) || 587,
-    secure: parseInt(process.env.EMAIL_PORT) === 465,
+    port,
+    secure: parseBool(process.env.EMAIL_SECURE) || port === 465,
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+    from: process.env.EMAIL_FROM || `"Medilink" <${process.env.EMAIL_USER}>`,
+    required: parseBool(process.env.EMAIL_REQUIRED),
+    connectionTimeout: getTimeout('EMAIL_CONNECTION_TIMEOUT_MS', 8000),
+    greetingTimeout: getTimeout('EMAIL_GREETING_TIMEOUT_MS', 8000),
+    socketTimeout: getTimeout('EMAIL_SOCKET_TIMEOUT_MS', 10000),
+  };
+};
+
+const createTransporter = () => {
+  const config = getEmailConfig();
+  return nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user: config.user,
+      pass: config.pass,
     },
+    connectionTimeout: config.connectionTimeout,
+    greetingTimeout: config.greetingTimeout,
+    socketTimeout: config.socketTimeout,
   });
 };
 
@@ -21,9 +48,20 @@ const sendEmail = async (options) => {
     return { messageId: `email-disabled-${Date.now()}`, accepted: [options.to] };
   }
 
+  const config = getEmailConfig();
+  const missing = ['host', 'user', 'pass'].filter((key) => !config[key]);
+  if (missing.length) {
+    const message = `Email is not configured; missing ${missing.join(', ')}`;
+    if (config.required || process.env.NODE_ENV === 'production') {
+      throw new Error(message);
+    }
+    console.warn(`[email] ${message}. Skipping email to ${options.to}.`);
+    return { messageId: `email-skipped-${Date.now()}`, accepted: [], skipped: true };
+  }
+
   const transporter = createTransporter();
   const mailOptions = {
-    from: process.env.EMAIL_FROM || `"Medilink" <${process.env.EMAIL_USER}>`,
+    from: config.from,
     to: options.to,
     subject: options.subject,
     html: options.html,
@@ -38,6 +76,16 @@ const sendEmail = async (options) => {
     console.error(`[email] Message delivery failed for ${options.to}: ${err.message}`);
     throw err;
   }
+};
+
+const sendEmailInBackground = (options, context = 'email') => {
+  setImmediate(() => {
+    sendEmail(options).catch((err) => {
+      console.warn(`[${context}] Background email delivery failed for ${options.to}: ${err.message}`);
+    });
+  });
+
+  return { queued: true, to: options.to };
 };
 
 const emailTemplates = {
@@ -102,4 +150,4 @@ const emailTemplates = {
   }),
 };
 
-module.exports = { sendEmail, emailTemplates };
+module.exports = { sendEmail, sendEmailInBackground, emailTemplates };

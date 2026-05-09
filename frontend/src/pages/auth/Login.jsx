@@ -13,6 +13,9 @@ export default function Login() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleLogin = async (e) => {
     e && e.preventDefault();
@@ -53,6 +56,36 @@ export default function Login() {
     }
   };
 
+  const openReset = () => {
+    setError("");
+    setNotice("");
+    setResetEmail(email.trim().toLowerCase());
+    setResetOpen(true);
+  };
+
+  const requestPasswordReset = async (e) => {
+    e && e.preventDefault();
+    setError("");
+    setNotice("");
+    const targetEmail = resetEmail.trim().toLowerCase();
+    if (!targetEmail) {
+      setError("Enter your email to receive a reset link");
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      const { auth } = await import("../../services/api");
+      await auth.forgotPassword(targetEmail);
+      setNotice("Password reset link sent. Check your inbox.");
+      setResetOpen(false);
+    } catch (err) {
+      setError(err.message || "Could not send reset link");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.background} />
@@ -88,6 +121,14 @@ export default function Login() {
               autoComplete="current-password"
             />
           </div>
+          <button
+            className={styles.forgotPasswordBtn}
+            disabled={loading}
+            onClick={openReset}
+            type="button"
+          >
+            Forgot password?
+          </button>
           {error && <div className={styles.error}>{error}</div>}
           <Button
             variant="primary"
@@ -106,6 +147,53 @@ export default function Login() {
           </button>
         </div>
       </div>
+
+      {resetOpen && (
+        <div className={styles.verifyModalBackdrop} role="presentation">
+          <section className={styles.verifyModal} role="dialog" aria-modal="true">
+            <div className={styles.verifyModalHeader}>
+              <span>Password reset</span>
+              <h2>Send reset link</h2>
+              <p>Enter your account email and we will send a secure password reset link.</p>
+            </div>
+            <form onSubmit={requestPasswordReset} className={styles.verifyModalBody}>
+              <div className={styles.inputGroup}>
+                <label>Email *</label>
+                <input
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="Email address"
+                  disabled={resetLoading}
+                  autoComplete="email"
+                  required
+                />
+              </div>
+
+              {error && <div className={styles.error}>{error}</div>}
+
+              <div className={styles.verifyModalActions}>
+                <Button
+                  variant="primary"
+                  className={styles.loginBtn}
+                  disabled={resetLoading}
+                  type="submit"
+                >
+                  {resetLoading ? "Sending..." : "Send Reset Link"}
+                </Button>
+                <button
+                  className={styles.linkBtn}
+                  disabled={resetLoading}
+                  onClick={() => setResetOpen(false)}
+                  type="button"
+                >
+                  Back to login
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
