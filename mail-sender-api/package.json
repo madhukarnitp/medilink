@@ -1,0 +1,20 @@
+{
+  "name": "medilink-mail-sender-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Vercel serverless API for sending MediLink emails through Gmail SMTP.",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev"
+  },
+  "dependencies": {
+    "nodemailer": "^8.0.7"
+  },
+  "devDependencies": {
+    "vercel": "^53.3.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

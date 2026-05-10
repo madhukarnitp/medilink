@@ -1,11 +1,10 @@
-const { Resend } = require('resend');
-
 const parseBool = (value) => String(value || '').toLowerCase() === 'true';
 
 const getEmailConfig = () => ({
-  apiKey: process.env.RESEND_API_KEY,
-  from: process.env.EMAIL_FROM || 'MediLink <onboarding@resend.dev>',
+  apiUrl: process.env.MAIL_SENDER_API_URL,
+  apiSecret: process.env.MAIL_API_SECRET,
   required: parseBool(process.env.EMAIL_REQUIRED),
+  timeoutMs: Number(process.env.MAIL_SENDER_TIMEOUT_MS || 10000),
 });
 
 const getSafeEmailError = (err) => ({
@@ -14,17 +13,17 @@ const getSafeEmailError = (err) => ({
   statusCode: err?.statusCode,
 });
 
-const normalizeResendError = (error) => {
-  if (!error) return null;
-  const err = new Error(error.message || 'Resend email delivery failed');
-  err.name = error.name || 'ResendError';
-  err.statusCode = error.statusCode || error.status;
-  return err;
+const readMailApiResponse = async (response) => {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
 };
 
 /**
  * Send an email
- * @param {Object} options - { to, subject, html, text }
+ * @param {Object} options - { to, subject, html }
  */
 const sendEmail = async (options) => {
   if (process.env.NODE_ENV === 'test' || process.env.DISABLE_EMAIL === 'true') {
@@ -32,7 +31,7 @@ const sendEmail = async (options) => {
   }
 
   const config = getEmailConfig();
-  const missing = ['apiKey', 'from'].filter((key) => !config[key]);
+  const missing = ['apiUrl', 'apiSecret'].filter((key) => !config[key]);
   if (missing.length) {
     const message = `Email is not configured; missing ${missing.join(', ')}`;
     if (config.required || process.env.NODE_ENV === 'production') {
@@ -42,27 +41,40 @@ const sendEmail = async (options) => {
     return { messageId: `email-skipped-${Date.now()}`, accepted: [], skipped: true };
   }
 
-  const resend = new Resend(config.apiKey);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 
   try {
-    const result = await resend.emails.send({
-      from: config.from,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-      text: options.text,
+    const response = await fetch(config.apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': config.apiSecret,
+      },
+      body: JSON.stringify({
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+      }),
+      signal: controller.signal,
     });
 
-    const providerError = normalizeResendError(result?.error);
-    if (providerError) throw providerError;
+    const result = await readMailApiResponse(response);
+
+    if (!response.ok) {
+      const err = new Error(result.message || 'Mail sender API delivery failed');
+      err.name = 'MailSenderApiError';
+      err.statusCode = response.status;
+      throw err;
+    }
 
     console.log('[email] Message sent', {
       to: options.to,
       subject: options.subject,
-      id: result?.data?.id,
+      id: result?.id,
     });
 
-    return result;
+    return { messageId: result?.id, accepted: [options.to], provider: result };
   } catch (err) {
     console.error('[email] Message delivery failed', {
       to: options.to,
@@ -70,6 +82,8 @@ const sendEmail = async (options) => {
       error: getSafeEmailError(err),
     });
     throw err;
+  } finally {
+    clearTimeout(timeout);
   }
 };
 
