@@ -22,6 +22,7 @@ const blueButton =
 
 export default function VideoPanel({
   audioOn,
+  callDebugLog = [],
   callState,
   elapsed,
   hasLocalStream,
@@ -162,7 +163,27 @@ export default function VideoPanel({
         speakerOn={speakerOn}
         videoOn={videoOn}
       />
+      <CallDebugLog items={callDebugLog} />
     </div>
+  );
+}
+
+function CallDebugLog({ items }) {
+  if (!import.meta.env?.DEV || !items?.length) return null;
+
+  return (
+    <details className="border-t border-med-border bg-med-card2 px-3.5 py-2 text-left">
+      <summary className="cursor-pointer text-xs font-semibold text-med-muted">
+        Call debug log
+      </summary>
+      <div className="mt-2 max-h-36 overflow-auto rounded-med border border-med-border bg-med-card p-2 font-mono text-[11px] leading-5 text-med-muted">
+        {items.map((item, index) => (
+          <div key={`${item.at}-${item.event}-${index}`}>
+            <span className="text-med-primary">{item.at}</span> {item.event}
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 

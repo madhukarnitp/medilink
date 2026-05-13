@@ -3,7 +3,7 @@ import { useApp } from "../../context/AppContext";
 export default function IncomingCallNotice() {
   const {
     incomingCall,
-    isCallBusy,
+    callActivity,
     acceptIncomingCall,
     dismissIncomingCall,
     openIncomingCallChat,
@@ -16,6 +16,10 @@ export default function IncomingCallNotice() {
     (incomingCall.from?.role === "doctor" ? "Doctor" : "Patient");
   const roleLabel =
     incomingCall.from?.role === "doctor" ? "Doctor" : "Patient";
+  const busyWithAnotherCall =
+    callActivity?.busy &&
+    String(callActivity.consultationId || "") !==
+      String(incomingCall.consultationId || "");
 
   return (
     <div
@@ -51,10 +55,10 @@ export default function IncomingCallNotice() {
           <button
             className="min-h-[38px] rounded-med bg-med-primary px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-55"
             onClick={acceptIncomingCall}
-            disabled={isCallBusy}
+            disabled={busyWithAnotherCall}
             type="button"
           >
-            {isCallBusy ? "Busy" : "Join video"}
+            {busyWithAnotherCall ? "Busy" : "Join video"}
           </button>
           <button
             className="min-h-[38px] rounded-med bg-med-accent px-3 text-sm font-medium text-white"

@@ -3,15 +3,18 @@ import { PAGES } from "../../../context/AppContext";
 import { consultations as consultApi, doctors as doctorsApi } from "../../../services/api";
 import { playIncomingMessageTone } from "../../../services/sounds";
 import {
+  acceptVideoCall,
   connectSocket,
   disconnectSocket,
   declineVideoCall,
   EVENTS,
   getSocket,
+  joinConsultationAsync,
   joinConsultation,
   requestVideoCall as requestSocketVideoCall,
   sendSocketMessage,
   sendTyping,
+  waitForSocketConnection,
 } from "../../../services/socket";
 import {
   CALL_STATES,
@@ -31,6 +34,7 @@ const ICE_CONFIG = {
 };
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const CALL_REQUEST_TIMEOUT_MS = 30_000;
 
 export function useConsultationSession({
   navigate,
@@ -65,6 +69,7 @@ export function useConsultationSession({
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [ratingData, setRatingData] = useState({ rating: 0, comment: "" });
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
+  const [callDebugLog, setCallDebugLog] = useState([]);
 
   const bottomRef = useRef(null);
   const typingTimer = useRef(null);
@@ -82,6 +87,7 @@ export function useConsultationSession({
   const acceptingCallRef = useRef(false);
   const endingCallRef = useRef(false);
   const outgoingRequestRef = useRef(false);
+  const callTimeoutRef = useRef(null);
   const pendingVideoStart = useRef(false);
   const lastRemoteCallEndAt = useRef(0);
   const isConsultationActive = consultation?.status === "active";
@@ -89,9 +95,35 @@ export function useConsultationSession({
   const callStatus = callState.status;
   const callBusy = isCallBusy(callStatus);
 
+  const addCallLog = useCallback((event, details = {}) => {
+    const item = {
+      event,
+      details,
+      at: new Date().toLocaleTimeString(),
+    };
+    setCallDebugLog((items) => [item, ...items].slice(0, 20));
+    if (import.meta.env?.DEV) {
+      console.debug("[MediLink call]", event, details);
+    }
+  }, []);
+
+  const clearCallTimeout = useCallback(() => {
+    if (!callTimeoutRef.current) return;
+    window.clearTimeout(callTimeoutRef.current);
+    callTimeoutRef.current = null;
+  }, []);
+
   useEffect(() => {
     consultIdRef.current = selectedConsultationId;
   }, [selectedConsultationId]);
+
+  const isCurrentConsultationId = useCallback(
+    (consultationId) =>
+      !consultationId ||
+      !selectedConsultationId ||
+      String(consultationId) === String(selectedConsultationId),
+    [selectedConsultationId],
+  );
 
   useEffect(() => {
     if (
@@ -323,6 +355,7 @@ export function useConsultationSession({
   }, []);
 
   const cleanupCall = useCallback(async ({ resetCallState = true } = {}) => {
+    clearCallTimeout();
     stopIncomingRing();
     localStream.current?.getTracks().forEach((track) => track.stop());
     screenStream.current?.getTracks().forEach((track) => track.stop());
@@ -349,8 +382,11 @@ export function useConsultationSession({
     setSpeakerOn(true);
     setCameraFacing("user");
     setScreenSharing(false);
-    if (resetCallState) dispatchCall({ type: "ENDED" });
-  }, [stopIncomingRing]);
+    if (resetCallState) {
+      dispatchCall({ type: "ENDED" });
+      addCallLog("call state reset");
+    }
+  }, [addCallLog, clearCallTimeout, stopIncomingRing]);
 
   const buildPeerConnection = useCallback(() => {
     if (pc.current) {
@@ -360,6 +396,7 @@ export function useConsultationSession({
 
     const connection = new RTCPeerConnection(ICE_CONFIG);
     pc.current = connection;
+    addCallLog("peer connection created");
 
     connection.onicecandidate = ({ candidate }) => {
       if (candidate) emitSignal("webrtc:ice-candidate", { candidate });
@@ -367,7 +404,9 @@ export function useConsultationSession({
 
     connection.onconnectionstatechange = () => {
       const state = connection.connectionState;
+      addCallLog("connection state changed", { state });
       if (state === "connected") {
+        clearCallTimeout();
         setElapsed(0);
         outgoingRequestRef.current = false;
         dispatchCall({ type: "CONNECTED" });
@@ -390,7 +429,7 @@ export function useConsultationSession({
     };
 
     return connection;
-  }, [emitSignal]);
+  }, [addCallLog, clearCallTimeout, emitSignal]);
 
   const getLocalMedia = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -529,6 +568,7 @@ export function useConsultationSession({
 
   const startCall = useCallback(async (options = {}) => {
     const allowWhileCalling = Boolean(options?.allowWhileCalling);
+    const allowWithoutPeerReady = Boolean(options?.allowWithoutPeerReady);
 
     if (!selectedConsultationId) {
       showToast(
@@ -556,12 +596,12 @@ export function useConsultationSession({
       return;
     }
 
-    if (!getSocket()?.connected || !socketReady) {
+    if (!getSocket()?.connected) {
       showToast("Connecting to video server. Try again in a moment.", "error");
       return;
     }
 
-    if (!peerReady) {
+    if (!peerReady && !allowWithoutPeerReady) {
       showToast(
         "Waiting for the other party to join the consultation before starting the call.",
         "warning",
@@ -587,6 +627,7 @@ export function useConsultationSession({
       });
       await connection.setLocalDescription(offer);
       emitSignal("webrtc:offer", { offer });
+      addCallLog("offer sent", { consultationId: selectedConsultationId });
       dispatchCall({ type: "UNLOCK_CONTROLS" });
     } catch (e) {
       outgoingRequestRef.current = false;
@@ -597,6 +638,7 @@ export function useConsultationSession({
     buildPeerConnection,
     callBusy,
     callStatus,
+    addCallLog,
     emitSignal,
     getLocalMedia,
     isConsultationActive,
@@ -607,7 +649,92 @@ export function useConsultationSession({
     user,
   ]);
 
-  const requestVideoCall = useCallback(() => {
+  const notifyIncomingCallAccepted = useCallback(() => {
+    if (!selectedConsultationId) return false;
+    const sent = acceptVideoCall(selectedConsultationId);
+    if (sent) {
+      addCallLog("call accepted signal sent", {
+        consultationId: selectedConsultationId,
+      });
+    }
+    return sent;
+  }, [addCallLog, selectedConsultationId]);
+
+  const prepareAcceptedIncomingCall = useCallback(() => {
+    if (!selectedConsultationId) return false;
+    if (
+      callBusy &&
+      callStatus !== CALL_STATES.INCOMING &&
+      callStatus !== CALL_STATES.CONNECTING
+    ) {
+      return false;
+    }
+
+    incomingOffer.current = null;
+    acceptingCallRef.current = true;
+    clearCallTimeout();
+    stopIncomingRing();
+    dispatchCall({
+      type: "INCOMING",
+      consultationId: selectedConsultationId,
+    });
+    dispatchCall({ type: "CONNECTING", controlsLocked: true });
+    addCallLog("call accepted, waiting for offer", {
+      consultationId: selectedConsultationId,
+    });
+    return notifyIncomingCallAccepted();
+  }, [
+    addCallLog,
+    callBusy,
+    callStatus,
+    clearCallTimeout,
+    notifyIncomingCallAccepted,
+    selectedConsultationId,
+    stopIncomingRing,
+  ]);
+
+  const ensureConsultationSocketReady = useCallback(async () => {
+    if (!selectedConsultationId) return false;
+
+    let sock = getSocket();
+    if (!sock) {
+      const token = localStorage.getItem("ml_token");
+      sock = connectSocket(token);
+    }
+
+    if (!sock) {
+      setSocketReady(false);
+      addCallLog("socket unavailable", { consultationId: selectedConsultationId });
+      return false;
+    }
+
+    const connected = sock.connected || (await waitForSocketConnection());
+    if (!connected) {
+      setSocketReady(false);
+      addCallLog("socket connection failed", {
+        consultationId: selectedConsultationId,
+      });
+      return false;
+    }
+
+    const response = await joinConsultationAsync(selectedConsultationId);
+    if (response.ok && isCurrentConsultationId(response.consultationId)) {
+      setSocketReady(true);
+      addCallLog("consultation socket joined", {
+        consultationId: selectedConsultationId,
+      });
+      return true;
+    }
+
+    setSocketReady(false);
+    addCallLog("consultation socket join failed", {
+      consultationId: selectedConsultationId,
+      message: response.message,
+    });
+    return false;
+  }, [addCallLog, isCurrentConsultationId, selectedConsultationId]);
+
+  const requestVideoCall = useCallback(async () => {
     if (!selectedConsultationId) {
       showToast("Open a consultation before starting a video call", "error");
       return;
@@ -633,9 +760,26 @@ export function useConsultationSession({
       return;
     }
 
-    if (!socketReady) {
+    const joined = socketReady || (await ensureConsultationSocketReady());
+    if (!joined) {
       showToast("Connecting to video server. Try again in a moment.", "error");
       return;
+    }
+
+    if (
+      callStatus === CALL_STATES.ERROR ||
+      pc.current ||
+      incomingOffer.current ||
+      pendingIceCandidates.current.length > 0 ||
+      pendingVideoStart.current ||
+      hasLocalStream ||
+      hasRemoteStream
+    ) {
+      addCallLog("caller state reset before new request", {
+        consultationId: selectedConsultationId,
+        previousStatus: callStatus,
+      });
+      cleanupCall({ resetCallState: false });
     }
 
     outgoingRequestRef.current = true;
@@ -643,6 +787,15 @@ export function useConsultationSession({
 
     if (sent) {
       pendingVideoStart.current = true;
+      addCallLog("call request sent", { consultationId: selectedConsultationId });
+      clearCallTimeout();
+      callTimeoutRef.current = window.setTimeout(() => {
+        addCallLog("timeout", { consultationId: selectedConsultationId });
+        pendingVideoStart.current = false;
+        outgoingRequestRef.current = false;
+        showToast("Video call timed out. You can try again.", "warning");
+        cleanupCall();
+      }, CALL_REQUEST_TIMEOUT_MS);
       dispatchCall({
         type: "START_OUTGOING",
         consultationId: selectedConsultationId,
@@ -655,57 +808,76 @@ export function useConsultationSession({
       return;
     }
 
-    if (peerReady) startCall({ allowWhileCalling: true });
   }, [
     callBusy,
     callStatus,
+    addCallLog,
+    cleanupCall,
+    clearCallTimeout,
+    hasLocalStream,
+    hasRemoteStream,
+    ensureConsultationSocketReady,
     isConsultationActive,
-    peerReady,
     selectedConsultationId,
     showToast,
     socketReady,
-    startCall,
     user,
   ]);
 
-  useEffect(() => {
-    if (
-      !pendingVideoStart.current ||
-      !peerReady ||
-      callStatus !== CALL_STATES.OUTGOING
-    ) {
-      return;
-    }
+  const answerIncomingOffer = useCallback(async (offer) => {
+    if (!offer) return;
+    clearCallTimeout();
+    const stream = await getLocalMedia();
+    const connection = buildPeerConnection();
+    addTracksToConnection(stream, connection);
 
-    pendingVideoStart.current = false;
-    startCall({ allowWhileCalling: true });
-  }, [callStatus, peerReady, startCall]);
+    await connection.setRemoteDescription(new RTCSessionDescription(offer));
+    await flushPendingIceCandidates();
+    const answer = await connection.createAnswer();
+    await connection.setLocalDescription(answer);
+
+    emitSignal("webrtc:answer", { answer });
+    addCallLog("answer sent", { consultationId: selectedConsultationId });
+    incomingOffer.current = null;
+    stopIncomingRing();
+    dispatchCall({ type: "UNLOCK_CONTROLS" });
+  }, [
+    buildPeerConnection,
+    addCallLog,
+    clearCallTimeout,
+    emitSignal,
+    flushPendingIceCandidates,
+    getLocalMedia,
+    selectedConsultationId,
+    stopIncomingRing,
+  ]);
 
   const acceptCall = useCallback(async () => {
-    const offer = incomingOffer.current;
-    if (!offer) return;
     if (callState.controlsLocked || acceptingCallRef.current) return;
-    if (callStatus !== CALL_STATES.INCOMING) {
+    if (
+      callStatus !== CALL_STATES.INCOMING &&
+      callStatus !== CALL_STATES.CONNECTING
+    ) {
       showToast("No incoming call is waiting.", "warning");
       return;
     }
 
     acceptingCallRef.current = true;
     dispatchCall({ type: "CONNECTING", controlsLocked: true });
+    addCallLog("call accepted", { consultationId: selectedConsultationId });
+    notifyIncomingCallAccepted();
+    stopIncomingRing();
+
+    const offer = incomingOffer.current;
+    if (!offer) {
+      addCallLog("waiting for caller offer", {
+        consultationId: selectedConsultationId,
+      });
+      return;
+    }
+
     try {
-      const stream = await getLocalMedia();
-      const connection = buildPeerConnection();
-      addTracksToConnection(stream, connection);
-
-      await connection.setRemoteDescription(new RTCSessionDescription(offer));
-      await flushPendingIceCandidates();
-      const answer = await connection.createAnswer();
-      await connection.setLocalDescription(answer);
-
-      emitSignal("webrtc:answer", { answer });
-      incomingOffer.current = null;
-      stopIncomingRing();
-      dispatchCall({ type: "UNLOCK_CONTROLS" });
+      await answerIncomingOffer(offer);
     } catch (e) {
       dispatchCall({ type: "ERROR", message: e.message });
       showToast(`Could not start call: ${e.message}`, "error");
@@ -713,26 +885,30 @@ export function useConsultationSession({
       acceptingCallRef.current = false;
     }
   }, [
-    buildPeerConnection,
+    addCallLog,
+    answerIncomingOffer,
     callState.controlsLocked,
     callStatus,
-    emitSignal,
-    flushPendingIceCandidates,
-    getLocalMedia,
+    notifyIncomingCallAccepted,
+    selectedConsultationId,
     showToast,
     stopIncomingRing,
   ]);
 
   const declineCall = useCallback(() => {
     if (callState.controlsLocked) return;
+    addCallLog("call declined", { consultationId: selectedConsultationId });
     dispatchCall({ type: "LOCK_CONTROLS" });
     incomingOffer.current = null;
+    clearCallTimeout();
     declineVideoCall(selectedConsultationId);
     emitSignal("webrtc:call-ended");
     stopIncomingRing();
     cleanupCall();
   }, [
+    addCallLog,
     callState.controlsLocked,
+    clearCallTimeout,
     cleanupCall,
     emitSignal,
     selectedConsultationId,
@@ -876,13 +1052,14 @@ export function useConsultationSession({
     }
 
     endingCallRef.current = true;
+    addCallLog("call ended", { consultationId: selectedConsultationId });
     dispatchCall({ type: "ENDING" });
     if (callStatus !== CALL_STATES.ERROR) {
       emitSignal("webrtc:call-ended");
     }
     await cleanupCall();
     endingCallRef.current = false;
-  }, [callState.controlsLocked, callStatus, cleanupCall, emitSignal]);
+  }, [addCallLog, callState.controlsLocked, callStatus, cleanupCall, emitSignal, selectedConsultationId]);
 
   const minimizeCall = useCallback(() => {
     dispatchCall({ type: "MINIMIZE" });
@@ -1105,12 +1282,36 @@ export function useConsultationSession({
     const onStopTyping = () => setPeerTyping(false);
     const onOffer = ({ offer, consultationId }) => {
       if (!isCurrentConsultation(consultationId)) return;
-      if (callBusy) {
+      const isAcceptedWaitingForOffer =
+        acceptingCallRef.current &&
+        (callStatus === CALL_STATES.CONNECTING ||
+          callStatus === CALL_STATES.INCOMING);
+
+      if (callBusy && !isAcceptedWaitingForOffer) {
+        addCallLog("incoming call declined because user is busy", {
+          consultationId: consultationId || selectedConsultationId,
+        });
         declineVideoCall(consultationId || selectedConsultationId);
         showToast("You are already in a call.", "warning");
         return;
       }
+      clearCallTimeout();
+      addCallLog("incoming call received", {
+        consultationId: consultationId || selectedConsultationId,
+      });
       incomingOffer.current = offer;
+      if (isAcceptedWaitingForOffer) {
+        answerIncomingOffer(offer)
+          .catch((e) => {
+            dispatchCall({ type: "ERROR", message: e.message });
+            showToast(`Could not start call: ${e.message}`, "error");
+          })
+          .finally(() => {
+            acceptingCallRef.current = false;
+          });
+        return;
+      }
+
       dispatchCall({
         type: "INCOMING",
         consultationId: consultationId || selectedConsultationId,
@@ -1146,6 +1347,10 @@ export function useConsultationSession({
           await pc.current.setRemoteDescription(
             new RTCSessionDescription(answer),
           );
+          clearCallTimeout();
+          addCallLog("answer received", {
+            consultationId: consultationId || selectedConsultationId,
+          });
           await flushPendingIceCandidates();
         }
       } catch (e) {
@@ -1160,6 +1365,9 @@ export function useConsultationSession({
           return;
         }
         await pc.current.addIceCandidate(new RTCIceCandidate(candidate));
+        addCallLog("ICE candidate received", {
+          consultationId: consultationId || selectedConsultationId,
+        });
       } catch (e) {
         console.warn("addIceCandidate:", e.message);
       }
@@ -1170,12 +1378,22 @@ export function useConsultationSession({
       if (now - lastRemoteCallEndAt.current < 800) return;
       lastRemoteCallEndAt.current = now;
       stopIncomingRing();
+      clearCallTimeout();
+      addCallLog("call ended", {
+        consultationId: consultationId || selectedConsultationId,
+        remote: true,
+      });
       showToast("The other party ended the call");
       dispatchCall({ type: "ENDING" });
       cleanupCall();
     };
     const onConsultationEnded = (payload = {}) => {
       if (!isCurrentConsultation(payload.consultationId)) return;
+      clearCallTimeout();
+      addCallLog("call ended", {
+        consultationId: payload.consultationId || selectedConsultationId,
+        consultationEnded: true,
+      });
       dispatchCall({ type: "ENDING" });
       cleanupCall();
       setConsultation((current) =>
@@ -1198,6 +1416,11 @@ export function useConsultationSession({
       setPeerReady(false);
       setPeerTyping(false);
       if (callStatus !== CALL_STATES.IDLE) {
+        clearCallTimeout();
+        addCallLog("call ended", {
+          consultationId: consultationId || selectedConsultationId,
+          peerLeft: true,
+        });
         showToast("The other party left. The call was closed.", "warning");
         dispatchCall({ type: "ENDING" });
         cleanupCall();
@@ -1206,10 +1429,90 @@ export function useConsultationSession({
     const onVideoCallDeclined = ({ consultationId } = {}) => {
       if (!isCurrentConsultation(consultationId)) return;
       pendingVideoStart.current = false;
+      outgoingRequestRef.current = false;
+      clearCallTimeout();
+      addCallLog("call declined", {
+        consultationId: consultationId || selectedConsultationId,
+        remote: true,
+      });
       stopIncomingRing();
       dispatchCall({ type: "ENDING" });
       cleanupCall();
       showToast("Video call declined", "info");
+    };
+    const onVideoCallTimeout = ({ consultationId } = {}) => {
+      if (!isCurrentConsultation(consultationId)) return;
+      pendingVideoStart.current = false;
+      outgoingRequestRef.current = false;
+      clearCallTimeout();
+      addCallLog("timeout", {
+        consultationId: consultationId || selectedConsultationId,
+      });
+      stopIncomingRing();
+      dispatchCall({ type: "ENDING" });
+      cleanupCall();
+      showToast("Video call timed out. You can try again.", "warning");
+    };
+    const onVideoCallIncoming = ({ consultationId, from } = {}) => {
+      if (!isCurrentConsultation(consultationId)) return;
+      if (callBusy) {
+        addCallLog("incoming request declined because user is busy", {
+          consultationId: consultationId || selectedConsultationId,
+        });
+        declineVideoCall(consultationId || selectedConsultationId);
+        return;
+      }
+
+      incomingOffer.current = null;
+      clearCallTimeout();
+      addCallLog("incoming call request received", {
+        consultationId: consultationId || selectedConsultationId,
+      });
+      dispatchCall({
+        type: "INCOMING",
+        consultationId: consultationId || selectedConsultationId,
+        peerName: from?.name || "",
+      });
+      try {
+        ringAudio.current?.play();
+      } catch {}
+    };
+    const onVideoCallAccepted = ({ consultationId } = {}) => {
+      if (!isCurrentConsultation(consultationId)) return;
+      addCallLog("call accepted", {
+        consultationId: consultationId || selectedConsultationId,
+        remote: true,
+      });
+      if (
+        pendingVideoStart.current &&
+        (callStatus === CALL_STATES.OUTGOING ||
+          callStatus === CALL_STATES.CONNECTING)
+      ) {
+        pendingVideoStart.current = false;
+        startCall({ allowWhileCalling: true, allowWithoutPeerReady: true });
+      }
+    };
+    const onVideoCallReset = ({ consultationId, reason } = {}) => {
+      if (!isCurrentConsultation(consultationId)) return;
+      if (reason === "new-request" && callBusy) {
+        addCallLog("call reset ignored while busy", {
+          consultationId: consultationId || selectedConsultationId,
+          reason,
+          status: callStatus,
+        });
+        return;
+      }
+
+      pendingVideoStart.current = false;
+      outgoingRequestRef.current = false;
+      clearCallTimeout();
+      addCallLog("call state reset", {
+        consultationId: consultationId || selectedConsultationId,
+        reason,
+        remote: true,
+      });
+      stopIncomingRing();
+      cleanupCall();
     };
 
     sock.on("connect", onConnect);
@@ -1228,7 +1531,11 @@ export function useConsultationSession({
     sock.on("peerJoined", onPeerJoined);
     sock.on("readyForCall", onReadyForCall);
     sock.on("consultationAccepted", onConsultationAccepted);
+    sock.on(EVENTS.VIDEO_CALL_INCOMING, onVideoCallIncoming);
+    sock.on(EVENTS.VIDEO_CALL_ACCEPTED, onVideoCallAccepted);
     sock.on(EVENTS.VIDEO_CALL_DECLINED, onVideoCallDeclined);
+    sock.on(EVENTS.VIDEO_CALL_TIMEOUT, onVideoCallTimeout);
+    sock.on(EVENTS.VIDEO_CALL_RESET, onVideoCallReset);
 
     if (sock.connected) onConnect();
 
@@ -1249,11 +1556,18 @@ export function useConsultationSession({
       sock.off("peerJoined", onPeerJoined);
       sock.off("readyForCall", onReadyForCall);
       sock.off("consultationAccepted", onConsultationAccepted);
+      sock.off(EVENTS.VIDEO_CALL_INCOMING, onVideoCallIncoming);
+      sock.off(EVENTS.VIDEO_CALL_ACCEPTED, onVideoCallAccepted);
       sock.off(EVENTS.VIDEO_CALL_DECLINED, onVideoCallDeclined);
+      sock.off(EVENTS.VIDEO_CALL_TIMEOUT, onVideoCallTimeout);
+      sock.off(EVENTS.VIDEO_CALL_RESET, onVideoCallReset);
     };
   }, [
+    addCallLog,
     addMessage,
+    answerIncomingOffer,
     callBusy,
+    clearCallTimeout,
     cleanupCall,
     consultation?.review?.rating,
     flushPendingIceCandidates,
@@ -1261,6 +1575,7 @@ export function useConsultationSession({
     consultation?.status,
     selectedConsultationId,
     showToast,
+    startCall,
     stopIncomingRing,
     user,
   ]);
@@ -1351,6 +1666,7 @@ export function useConsultationSession({
     callBusy,
     callState,
     callStatus,
+    callDebugLog,
     consultation,
     elapsed,
     error,
@@ -1385,6 +1701,8 @@ export function useConsultationSession({
     leaveConsultation,
     minimizeCall,
     restoreCall,
+    notifyIncomingCallAccepted,
+    prepareAcceptedIncomingCall,
     requestVideoCall,
     sendMessage,
     startCall,

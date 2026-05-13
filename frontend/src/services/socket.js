@@ -16,6 +16,8 @@ let disconnectTimer = null;
 
 export const getSocket = () => socket;
 
+export const isSocketConnected = () => Boolean(socket?.connected);
+
 export const connectSocket = (token) => {
   if (!token) return null;
 
@@ -25,7 +27,7 @@ export const connectSocket = (token) => {
   }
 
   if (socket && socketToken === token) {
-    if (!socket.connected && !socket.active) socket.connect();
+    if (!socket.connected) socket.connect();
     return socket;
   }
 
@@ -75,10 +77,63 @@ export const disconnectSocket = () => {
   }, 250);
 };
 
+export const waitForSocketConnection = (timeoutMs = 8000) =>
+  new Promise((resolve) => {
+    if (socket?.connected) {
+      resolve(true);
+      return;
+    }
+
+    if (!socket) {
+      resolve(false);
+      return;
+    }
+
+    let done = false;
+    const finish = (connected) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      socket?.off("connect", onConnect);
+      socket?.off("connect_error", onError);
+      resolve(connected);
+    };
+    const onConnect = () => finish(true);
+    const onError = () => finish(false);
+    const timer = setTimeout(() => finish(Boolean(socket?.connected)), timeoutMs);
+
+    socket.once("connect", onConnect);
+    socket.once("connect_error", onError);
+    socket.connect();
+  });
+
 export const joinConsultation = (consultationId, callback) => {
-  if (!socket?.connected || !consultationId) return;
+  if (!socket?.connected || !consultationId) return false;
   socket.emit("joinConsultation", { consultationId }, callback);
+  return true;
 };
+
+export const joinConsultationAsync = (consultationId, timeoutMs = 8000) =>
+  new Promise((resolve) => {
+    if (!socket?.connected || !consultationId) {
+      resolve({ ok: false, message: "Socket is not connected" });
+      return;
+    }
+
+    let done = false;
+    const finish = (response) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(response || { ok: false, message: "Join failed" });
+    };
+    const timer = setTimeout(
+      () => finish({ ok: false, message: "Join consultation timed out" }),
+      timeoutMs,
+    );
+
+    socket.emit("joinConsultation", { consultationId }, finish);
+  });
 
 export const sendSocketMessage = (consultationId, text) => {
   if (!socket?.connected) return false;
@@ -103,6 +158,12 @@ export const declineVideoCall = (consultationId) => {
   return true;
 };
 
+export const acceptVideoCall = (consultationId) => {
+  if (!socket?.connected || !consultationId) return false;
+  socket.emit("videoCall:accept", { consultationId });
+  return true;
+};
+
 export const EVENTS = {
   RECEIVE_MESSAGE: "receiveMessage",
   TYPING: "typing",
@@ -114,5 +175,8 @@ export const EVENTS = {
   CONSULTATION_ENDED: "consultationEnded",
   VIDEO_CALL_INCOMING: "videoCall:incoming",
   VIDEO_CALL_REQUESTED: "videoCall:requested",
+  VIDEO_CALL_ACCEPTED: "videoCall:accepted",
   VIDEO_CALL_DECLINED: "videoCall:declined",
+  VIDEO_CALL_TIMEOUT: "videoCall:timeout",
+  VIDEO_CALL_RESET: "videoCall:reset",
 };

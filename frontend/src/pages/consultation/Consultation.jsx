@@ -62,6 +62,8 @@ function ConsultationRoom({
 }) {
   const autoVideoRequested = useRef(false);
   const autoAnswered = useRef(false);
+  const autoAcceptNotified = useRef(false);
+  const lastAutoAcceptKey = useRef(null);
   const [leaving, setLeaving] = useState(false);
   const session = useConsultationSession({
     navigate,
@@ -175,8 +177,41 @@ function ConsultationRoom({
     if (roomMode === "chat") {
       autoVideoRequested.current = false;
       autoAnswered.current = false;
+      autoAcceptNotified.current = false;
     }
   }, [roomMode]);
+
+  useEffect(() => {
+    const key =
+      pageParams?.callRequestKey ||
+      `${selectedConsultationId}:${pageParams?.autoAcceptCall ? "auto" : "manual"}`;
+    if (lastAutoAcceptKey.current === key) return;
+    lastAutoAcceptKey.current = key;
+    autoAnswered.current = false;
+    autoAcceptNotified.current = false;
+  }, [
+    pageParams?.autoAcceptCall,
+    pageParams?.callRequestKey,
+    selectedConsultationId,
+  ]);
+
+  useEffect(() => {
+    if (
+      !pageParams?.autoAcceptCall ||
+      roomMode !== "call" ||
+      !session.socketReady ||
+      autoAcceptNotified.current
+    ) {
+      return;
+    }
+
+    autoAcceptNotified.current = session.prepareAcceptedIncomingCall();
+  }, [
+    pageParams?.autoAcceptCall,
+    roomMode,
+    session.socketReady,
+    session.prepareAcceptedIncomingCall,
+  ]);
 
   useEffect(() => {
     if (
@@ -281,6 +316,7 @@ function ConsultationRoom({
           <VideoPanel
             audioOn={session.audioOn}
             callState={session.callState}
+            callDebugLog={session.callDebugLog}
             elapsed={session.elapsed}
             hasLocalStream={session.hasLocalStream}
             hasRemoteStream={session.hasRemoteStream}
@@ -320,6 +356,7 @@ function ConsultationRoom({
           <VideoPanel
             audioOn={session.audioOn}
             callState={session.callState}
+            callDebugLog={session.callDebugLog}
             elapsed={session.elapsed}
             hasLocalStream={session.hasLocalStream}
             hasRemoteStream={session.hasRemoteStream}

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppProvider, useApp, PAGES } from "./context/AppContext";
@@ -8,6 +8,7 @@ import AdminShell from "./components/layout/AdminShell";
 import IncomingCallNotice from "./components/layout/IncomingCallNotice";
 import Toast from "./components/ui/Toast";
 import { FullPageSkeleton, PageSkeleton } from "./components/ui/UI";
+import WakeUpScreen from "./components/ui/WakeUpScreen";
 import { startKeepAlive, stopKeepAlive } from "./services/keepAlive";
 import {
   getMissingProfileFields,
@@ -42,6 +43,7 @@ const AdminMedicines = lazy(() => import("./pages/admin/AdminMedicines"));
 const Profile = lazy(() => import("./pages/profile/Profile"));
 const ErrorPage = lazy(() => import("./pages/error/ErrorPage"));
 const ChatbotWidget = lazy(() => import("./components/ui/ChatbotWidget"));
+const StatusPage = lazy(() => import("./pages/status/StatusPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,6 +57,16 @@ const queryClient = new QueryClient({
 
 const loadingFallback = <PageSkeleton />;
 
+const getBackendHealthUrl = () => {
+  const explicitBackendUrl = import.meta.env?.VITE_BACKEND_URL;
+  if (explicitBackendUrl) {
+    return `${explicitBackendUrl.replace(/\/$/, "")}/api/health`;
+  }
+
+  const apiUrl = import.meta.env?.VITE_API_URL || "http://localhost:5001/api";
+  return `${apiUrl.replace(/\/api\/?$/, "").replace(/\/$/, "")}/api/health`;
+};
+
 const adminPages = {
   [PAGES.ADMIN_DASHBOARD]: AdminDashboard,
   [PAGES.ADMIN_USERS]: AdminUsers,
@@ -62,6 +74,7 @@ const adminPages = {
   [PAGES.ADMIN_ORDERS]: AdminOrders,
   [PAGES.ADMIN_MEDICINES]: AdminMedicines,
   [PAGES.PROFILE]: Profile,
+  [PAGES.STATUS]: StatusPage,
   [PAGES.NOT_FOUND]: ErrorPage,
 };
 
@@ -78,6 +91,7 @@ const doctorPages = {
   [PAGES.PRESCRIPTION]: Prescription,
   [PAGES.PRESCRIPTION_VERIFY]: Prescription,
   [PAGES.PROFILE]: Profile,
+  [PAGES.STATUS]: StatusPage,
   [PAGES.NOT_FOUND]: ErrorPage,
 };
 
@@ -94,6 +108,7 @@ const patientPages = {
   [PAGES.ORDERS]: Orders,
   [PAGES.SOS]: SOSPage,
   [PAGES.PROFILE]: Profile,
+  [PAGES.STATUS]: StatusPage,
   [PAGES.NOT_FOUND]: ErrorPage,
 };
 
@@ -146,6 +161,7 @@ function AppContent() {
   const isEmailVerificationUrl = /^verify-email\/[^/?#]+/i.test(rawRoute);
   const isResetPasswordUrl = /^reset-password\/[^/?#]+/i.test(rawRoute);
   const isPublicPrescriptionUrl = /^prescription\/[^/?#]+/i.test(rawRoute);
+  const isStatusUrl = /^status(?:[/?#]|$)/i.test(rawRoute);
   const isPublicError =
     !isAuthenticated &&
     activePage === PAGES.NOT_FOUND &&
@@ -183,6 +199,17 @@ function AppContent() {
       <>
         <Suspense fallback={loadingFallback}>
           <ResetPassword />
+        </Suspense>
+        <Toast onDismiss={dismissToast} toasts={toasts} />
+      </>
+    );
+  }
+
+  if (isStatusUrl || activePage === PAGES.STATUS) {
+    return (
+      <>
+        <Suspense fallback={loadingFallback}>
+          <StatusPage />
         </Suspense>
         <Toast onDismiss={dismissToast} toasts={toasts} />
       </>
@@ -237,14 +264,79 @@ function AppContent() {
   );
 }
 
+function BackendHealthGate({ children }) {
+  const [isBackendReady, setIsBackendReady] = useState(false);
+  const location = useLocation();
+  const rawRoute =
+    location.hash.replace(/^#\/?/, "") || location.pathname.replace(/^\/+/, "");
+  const isStatusRoute = /^status(?:[/?#]|$)/i.test(rawRoute);
+
+  useEffect(() => {
+    if (isStatusRoute) {
+      setIsBackendReady(true);
+      return undefined;
+    }
+
+    let mounted = true;
+    let activeController = null;
+    let intervalId = null;
+    const healthUrl = getBackendHealthUrl();
+    setIsBackendReady(false);
+
+    const checkBackendHealth = async () => {
+      if (activeController) activeController.abort();
+
+      const controller = new AbortController();
+      activeController = controller;
+      const timeoutId = window.setTimeout(() => controller.abort(), 5_000);
+
+      try {
+        const response = await fetch(healthUrl, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
+        if (mounted && response.ok) {
+          setIsBackendReady(true);
+          if (intervalId) window.clearInterval(intervalId);
+        } else if (mounted) {
+          setIsBackendReady(false);
+        }
+      } catch {
+        if (mounted) setIsBackendReady(false);
+      } finally {
+        window.clearTimeout(timeoutId);
+        if (activeController === controller) {
+          activeController = null;
+        }
+      }
+    };
+
+    checkBackendHealth();
+    intervalId = window.setInterval(checkBackendHealth, 4_000);
+
+    return () => {
+      mounted = false;
+      if (intervalId) window.clearInterval(intervalId);
+      if (activeController) activeController.abort();
+    };
+  }, [isStatusRoute]);
+
+  if (!isBackendReady) return <WakeUpScreen />;
+
+  return children;
+}
+
 export default function App() {
   return (
     <div className="light-theme">
       <BrowserRouter>
         <QueryClientProvider client={queryClient}>
-          <AppProvider>
-            <AppContent />
-          </AppProvider>
+          <BackendHealthGate>
+            <AppProvider>
+              <AppContent />
+            </AppProvider>
+          </BackendHealthGate>
         </QueryClientProvider>
       </BrowserRouter>
     </div>

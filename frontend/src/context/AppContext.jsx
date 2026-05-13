@@ -15,8 +15,10 @@ import {
   prescriptionSelection,
 } from "../services/api";
 import {
+  connectSocket,
   disconnectSocket,
   declineVideoCall,
+  EVENTS,
 } from "../services/socket";
 import {
   connectNotificationStream,
@@ -40,6 +42,7 @@ export const PAGES = {
   RECORDS: "records",
   ORDERS: "orders",
   SOS: "sos",
+  STATUS: "status",
   PROFILE: "profile",
   DOCTOR_DASHBOARD: "doctor_dashboard",
   DOCTOR_PATIENTS: "doctor_patients",
@@ -70,6 +73,7 @@ const PAGE_PATHS = {
   [PAGES.RECORDS]: "/records",
   [PAGES.ORDERS]: "/orders",
   [PAGES.SOS]: "/sos",
+  [PAGES.STATUS]: "/status",
   [PAGES.PROFILE]: "/profile",
   [PAGES.DOCTOR_DASHBOARD]: "/doctor/dashboard",
   [PAGES.DOCTOR_PATIENTS]: "/doctor/patients",
@@ -212,6 +216,7 @@ const getDeepLinkTarget = () => {
   if (parts[0] === "records") return { page: PAGES.RECORDS };
   if (parts[0] === "orders") return { page: PAGES.ORDERS };
   if (parts[0] === "sos") return { page: PAGES.SOS };
+  if (parts[0] === "status") return { page: PAGES.STATUS };
   if (parts[0] === "profile") return { page: PAGES.PROFILE };
   if (parts[0] === "admin") {
     if (parts[1] === "users") return { page: PAGES.ADMIN_USERS };
@@ -637,7 +642,12 @@ export function AppProvider({ children }) {
 
   const acceptIncomingCall = useCallback(() => {
     if (!incomingCall?.consultationId) return;
-    if (callActivity.busy) {
+    const busyWithAnotherCall =
+      callActivity.busy &&
+      String(callActivity.consultationId || "") !==
+        String(incomingCall.consultationId || "");
+
+    if (busyWithAnotherCall) {
       declineVideoCall(incomingCall.consultationId);
       setIncomingCall(null);
       showToast("You are already in a call.", "warning");
@@ -649,6 +659,7 @@ export function AppProvider({ children }) {
       consultationId,
       mode: "call",
       autoAcceptCall: true,
+      callRequestKey: incomingCall.requestedAt || incomingCall.acceptedAt || Date.now(),
     });
   }, [callActivity.busy, incomingCall, navigate, showToast]);
 
@@ -665,10 +676,104 @@ export function AppProvider({ children }) {
 
   const dismissIncomingCall = useCallback(() => {
     if (incomingCall?.consultationId) {
-      declineVideoCall(incomingCall.consultationId);
+      const sent = declineVideoCall(incomingCall.consultationId);
+      if (!sent) {
+        showToast("Server is starting. Please try again in a few seconds.", "warning");
+      }
     }
     setIncomingCall(null);
-  }, [incomingCall]);
+  }, [incomingCall, showToast]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?._id) return undefined;
+    const token = localStorage.getItem("ml_token");
+    if (!token) return undefined;
+
+    const sock = connectSocket(token);
+    if (!sock) return undefined;
+
+    const normalizeIncomingCall = (payload = {}) => {
+      const consultationId =
+        payload.consultationId ||
+        payload.params?.consultationId ||
+        payload.consultation?._id;
+      if (!consultationId) return null;
+
+      return {
+        ...payload,
+        consultationId,
+        from: payload.from || {
+          name:
+            payload.fromName ||
+            payload.patient?.name ||
+            payload.doctor?.name ||
+            "MediLink user",
+          role: payload.fromRole,
+        },
+        reason: payload.reason || payload.params?.reason,
+      };
+    };
+
+    const onIncomingCall = (payload = {}) => {
+      const nextIncomingCall = normalizeIncomingCall(payload);
+      if (!nextIncomingCall) return;
+
+      const busyWithAnotherCall =
+        callActivity.busy &&
+        String(callActivity.consultationId || "") !==
+          String(nextIncomingCall.consultationId || "");
+
+      if (busyWithAnotherCall) {
+        declineVideoCall(nextIncomingCall.consultationId);
+        return;
+      }
+
+      setIncomingCall(nextIncomingCall);
+      playNotificationSound();
+    };
+
+    const onCallDeclined = ({ consultationId } = {}) => {
+      if (!consultationId) return;
+      setIncomingCall((current) =>
+        current?.consultationId &&
+        String(current.consultationId) === String(consultationId)
+          ? null
+          : current,
+      );
+    };
+
+    const onCallTimeout = ({ consultationId } = {}) => {
+      if (!consultationId) return;
+      setIncomingCall((current) =>
+        current?.consultationId &&
+        String(current.consultationId) === String(consultationId)
+          ? null
+          : current,
+      );
+      showToast("Video call timed out. You can try again.", "info");
+    };
+    const onCallReset = ({ consultationId } = {}) => {
+      if (!consultationId) return;
+      setIncomingCall((current) =>
+        current?.consultationId &&
+        String(current.consultationId) === String(consultationId)
+          ? null
+          : current,
+      );
+    };
+
+    sock.on(EVENTS.VIDEO_CALL_INCOMING, onIncomingCall);
+    sock.on(EVENTS.VIDEO_CALL_DECLINED, onCallDeclined);
+    sock.on(EVENTS.VIDEO_CALL_TIMEOUT, onCallTimeout);
+    sock.on(EVENTS.VIDEO_CALL_RESET, onCallReset);
+
+    return () => {
+      sock.off(EVENTS.VIDEO_CALL_INCOMING, onIncomingCall);
+      sock.off(EVENTS.VIDEO_CALL_DECLINED, onCallDeclined);
+      sock.off(EVENTS.VIDEO_CALL_TIMEOUT, onCallTimeout);
+      sock.off(EVENTS.VIDEO_CALL_RESET, onCallReset);
+    };
+  }, [callActivity.busy, isAuthenticated, showToast, user?._id]);
 
   useEffect(() => {
     if (!isAuthenticated || !userRef.current) return;
@@ -764,7 +869,11 @@ export function AppProvider({ children }) {
           reason: payload.reason || payload.params?.reason,
         };
 
-        if (callActivity.busy) {
+        const busyWithAnotherCall =
+          callActivity.busy &&
+          String(callActivity.consultationId || "") !== String(consultationId);
+
+        if (busyWithAnotherCall) {
           declineVideoCall(consultationId);
         } else {
           setIncomingCall(nextIncomingCall);

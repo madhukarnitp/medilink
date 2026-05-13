@@ -139,6 +139,21 @@ const refreshAccessToken = async () => {
   return refreshPromise;
 };
 
+const normalizeNetworkError = (err) => {
+  if (err?.name === "AbortError") {
+    return new Error("Server is starting. Please try again in a few seconds.");
+  }
+
+  if (
+    err instanceof TypeError ||
+    /failed to fetch|networkerror|load failed/i.test(err?.message || "")
+  ) {
+    return new Error("Server is starting. Please try again in a few seconds.");
+  }
+
+  return err;
+};
+
 async function send(path, options = {}) {
   const { skipAuth = false, ...fetchOptions } = options;
   const token = getToken();
@@ -154,18 +169,27 @@ async function send(path, options = {}) {
   }
   if (token && !skipAuth) headers["Authorization"] = `Bearer ${token}`;
 
-  let res = await fetch(`${BASE_URL}${path}`, {
-    ...fetchOptions,
-    headers,
-    cache: "no-store",
-  });
-
-  if (method === "GET" && res.status === 304) {
-    res = await fetch(`${BASE_URL}${withCacheBust(path)}`, {
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
       ...fetchOptions,
       headers,
-      cache: "reload",
+      cache: "no-store",
     });
+  } catch (err) {
+    throw normalizeNetworkError(err);
+  }
+
+  if (method === "GET" && res.status === 304) {
+    try {
+      res = await fetch(`${BASE_URL}${withCacheBust(path)}`, {
+        ...fetchOptions,
+        headers,
+        cache: "reload",
+      });
+    } catch (err) {
+      throw normalizeNetworkError(err);
+    }
   }
 
   if (
@@ -177,11 +201,15 @@ async function send(path, options = {}) {
     try {
       const nextToken = await refreshAccessToken();
       headers["Authorization"] = `Bearer ${nextToken}`;
-      res = await fetch(`${BASE_URL}${path}`, {
-        ...fetchOptions,
-        headers,
-        cache: "no-store",
-      });
+      try {
+        res = await fetch(`${BASE_URL}${path}`, {
+          ...fetchOptions,
+          headers,
+          cache: "no-store",
+        });
+      } catch (err) {
+        throw normalizeNetworkError(err);
+      }
     } catch {
       redirectToLogin();
       throw new Error("Session expired. Please log in again.");
